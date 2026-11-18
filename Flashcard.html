@@ -1,0 +1,3264 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashcardClass - Piattaforma Collaborativa per Classi</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Animazione Rotazione 3D Flashcard */
+        .perspective-1000 {
+            perspective: 1200px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        /* Scrollbar personalizzata */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-600 selection:text-white">
+
+    <!-- =================================================================== -->
+    <!-- BARRA DI NAVIGAZIONE SUPERIORE                                      -->
+    <!-- =================================================================== -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+            <!-- Logo e Titolo -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="handleLogoClick()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                    <i data-lucide="layers" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-slate-900 text-lg sm:text-xl tracking-tight leading-none">
+                        Flashcard<span class="text-indigo-600">Class</span>
+                    </h1>
+                    <p id="header-sync-subtext" class="text-[11px] text-slate-500 font-medium mt-0.5">
+                        Mazzo Collaborativo di Classe
+                    </p>
+                </div>
+            </div>
+
+            <!-- Controlli Destra: Badge Stato, Sincronizza Ora, Utente Loggato, Area Docenti -->
+            <div class="flex items-center gap-2 sm:gap-2.5">
+                <!-- Badge Stato Connessione -->
+                <div id="connection-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 transition-colors" title="Stato connessione database">
+                    <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span id="connection-label" class="hidden sm:inline">Locale Offline</span>
+                </div>
+
+                <!-- Pulsante Sincronizza Ora -->
+                <button type="button" onclick="manualSyncNow()" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 flex items-center gap-1.5 transition" title="Sincronizza dati">
+                    <i data-lucide="refresh-cw" id="sync-icon" class="w-3.5 h-3.5"></i>
+                    <span class="hidden md:inline">Sincronizza Ora</span>
+                </button>
+
+                <!-- Badge Utente Loggato (Studente o Docente) -->
+                <div id="header-user-badge" class="hidden items-center gap-2 bg-indigo-50/80 px-3 py-1.5 rounded-xl border border-indigo-200">
+                    <i data-lucide="graduation-cap" id="header-user-icon" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                    <div class="leading-tight">
+                        <span id="header-user-name" class="font-bold text-slate-800 text-xs sm:text-sm block">---</span>
+                        <span id="header-user-role" class="text-[10px] font-extrabold text-indigo-600 uppercase block">---</span>
+                    </div>
+                    <button type="button" onclick="logoutUser()" class="ml-1 px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 rounded-lg flex items-center gap-1 transition" title="Esci">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Esci</span>
+                    </button>
+                </div>
+
+                <!-- Pulsante Area Docenti -->
+                <button type="button" id="btn-teacher-nav" onclick="toggleTeacherArea()" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 flex items-center gap-1.5 transition shrink-0">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-indigo-600"></i>
+                    <span id="btn-teacher-nav-text">Area Docenti</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENITORE PRINCIPALE -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
+
+        <!-- =============================================================== -->
+        <!-- SCHERMATA 1: LOGIN STUDENTI (CAMPI SEMPRE VUOTI)                -->
+        <!-- =============================================================== -->
+        <section id="screen-login" class="my-auto py-6 max-w-md mx-auto w-full">
+            <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
+                <div class="text-center mb-6">
+                    <div class="inline-flex p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 mb-3">
+                        <i data-lucide="book-open-check" class="w-8 h-8"></i>
+                    </div>
+                    <h2 class="text-2xl font-extrabold text-slate-900">Accesso Studenti</h2>
+                    <p class="text-sm text-slate-500 mt-1">
+                        Inserisci le credenziali ricevute dal docente per entrare nel mazzo della tua classe.
+                    </p>
+                </div>
+
+                <!-- Avviso in modalità Locale Offline -->
+                <div id="login-offline-notice" class="mb-5 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                    <i data-lucide="wifi-off" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold">Database non ancora collegato</p>
+                        <p class="mt-0.5 text-amber-800">Il docente deve prima configurare il collegamento dall'<strong>Area Docenti</strong> per abilitare l'accesso online.</p>
+                    </div>
+                </div>
+
+                <form onsubmit="handleStudentLogin(event)" autocomplete="off" class="space-y-4">
+                    <div>
+                        <label for="login-username" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                            Username
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="login-username" value="" required autocomplete="off" placeholder="Inserisci username"
+                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="login-password" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                            Password
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                <i data-lucide="lock" class="w-4 h-4"></i>
+                            </span>
+                            <input type="password" id="login-password" value="" required autocomplete="new-password" placeholder="Inserisci password"
+                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btn-student-login-submit"
+                        class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                        Accedi
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+                    <span>Accesso protetto e verificato sul server</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- SCHERMATA 2: AREA STUDENTI (MAZZO DI CLASSE & CREA FLASHCARD)   -->
+        <!-- =============================================================== -->
+        <section id="screen-student" class="hidden space-y-6">
+            <!-- Banner Classe + Pulsante Avvia Studio 3D -->
+            <div class="bg-gradient-to-r from-indigo-600 to-sky-600 text-white p-5 sm:p-6 rounded-3xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3.5">
+                    <div class="p-3 bg-white/15 backdrop-blur-md rounded-2xl shrink-0">
+                        <i data-lucide="users" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-extrabold">
+                            Mazzo Collaborativo — Classe <span id="student-banner-class">---</span>
+                        </h2>
+                        <p class="text-xs sm:text-sm text-indigo-100 mt-0.5">
+                            Crea nuove flashcard per i tuoi compagni ed esercitati con il player interattivo 3D.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5 self-end md:self-center">
+                    <button id="btn-back-to-teacher" type="button" onclick="returnFromTeacherPreview()"
+                        class="hidden px-3.5 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-extrabold items-center gap-1.5 transition">
+                        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                        <span>Torna al Pannello Docente</span>
+                    </button>
+
+                    <div class="px-3.5 py-2.5 bg-slate-900/30 rounded-xl text-xs font-extrabold">
+                        <span id="student-deck-total-badge">0 Carte</span>
+                    </div>
+
+                    <button type="button" onclick="openFullscreenStudy()"
+                        class="px-4 py-2.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 shadow-lg transition active:scale-[0.99]">
+                        <i data-lucide="play-circle" class="w-4 h-4 text-sky-600"></i>
+                        <span>Avvia Studio 3D</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Barra Filtri Disciplina -> Argomento & Ricerca -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
+                        <i data-lucide="filter" class="w-3.5 h-3.5 text-indigo-600"></i>
+                        <span>Filtra mazzo:</span>
+                    </span>
+                    <select id="filter-student-discipline" onchange="onStudentFilterDisciplineChange()"
+                        class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">Tutte le discipline</option>
+                    </select>
+                    <select id="filter-student-topic" onchange="onStudentFilterChange()"
+                        class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">Tutti gli argomenti</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 flex-1 lg:max-w-sm">
+                    <div class="relative flex-1">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </span>
+                        <input type="text" id="student-search-input" oninput="onStudentFilterChange()" placeholder="Cerca domanda, risposta o autore..."
+                            class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:bg-white">
+                    </div>
+                    <span id="student-visible-cards-count" class="text-xs font-bold text-slate-500 shrink-0">0 carte</span>
+                </div>
+            </div>
+
+            <!-- Griglia Principale: Form Aggiungi Nuova Flashcard + Elenco Carte della Classe -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Colonna Sinistra: Modulo Aggiungi Nuova Flashcard -->
+                <div id="student-create-card-panel" class="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
+                    <h3 class="text-base font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-5 h-5 text-indigo-600"></i>
+                        <span>Aggiungi Nuova Flashcard</span>
+                    </h3>
+
+                    <form onsubmit="handleSaveFlashcard(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="card-input-discipline" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Disciplina
+                                </label>
+                                <select id="card-input-discipline" required onchange="populateCardTopicSelect()"
+                                    class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                                </select>
+                            </div>
+                            <div>
+                                <label for="card-input-topic" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Argomento
+                                </label>
+                                <select id="card-input-topic" required
+                                    class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="card-input-front" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                Fronte / Domanda
+                            </label>
+                            <textarea id="card-input-front" required rows="3" placeholder="Scrivi qui la domanda o il concetto chiave..."
+                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition resize-none"></textarea>
+                        </div>
+
+                        <div>
+                            <label for="card-input-back" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                Retro / Risposta
+                            </label>
+                            <textarea id="card-input-back" required rows="3" placeholder="Scrivi qui la risposta o la definizione..."
+                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition resize-none"></textarea>
+                        </div>
+
+                        <button type="submit" id="btn-submit-card"
+                            class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-500/20 text-sm flex items-center justify-center gap-2 transition">
+                            Salva Flashcard
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Colonna Destra: Elenco Flashcard della Classe (NESSUN PULSANTE ELIMINA) -->
+                <div class="lg:col-span-7 space-y-3">
+                    <div id="student-cards-grid" class="grid grid-cols-1 gap-3 max-h-[650px] overflow-y-auto pr-1">
+                        <!-- Renderizzato dinamicamente -->
+                    </div>
+
+                    <div id="student-cards-empty" class="hidden bg-white border border-dashed border-slate-300 rounded-3xl p-10 text-center">
+                        <i data-lucide="folder-open" class="w-10 h-10 text-slate-300 mx-auto mb-2"></i>
+                        <h4 class="font-bold text-slate-700">Nessuna flashcard trovata</h4>
+                        <p class="text-xs text-slate-500 mt-1">Crea la prima flashcard per la tua classe oppure modifica i filtri selezionati.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- SCHERMATA 3: AREA DOCENTI A 4 SCHEDE                            -->
+        <!-- =============================================================== -->
+        <section id="screen-teacher" class="hidden space-y-6">
+            <!-- Intestazione Docente -->
+            <div class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="px-3 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-full text-[11px] font-extrabold uppercase tracking-wider">
+                            Area Riservata Docente (<span id="teacher-badge-username">Configurazione</span>)
+                        </span>
+                    </div>
+                    <h2 class="text-2xl font-extrabold tracking-tight">Pannello di Controllo Docente</h2>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-0.5">
+                        Gestisci classi, discipline, argomenti, account studenti, mazzi di flashcard e sicurezza del database.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="manualSyncNow()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition" title="Sincronizza dati">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-sky-400"></i>
+                        <span>Sincronizza Ora</span>
+                    </button>
+                    <button type="button" onclick="logoutUser()" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        <span>Esci</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Barra Navigazione 4 Schede Docente -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 bg-slate-200/70 p-1.5 rounded-2xl">
+                <button type="button" id="t-tab-btn-1" onclick="switchTeacherTab(1)"
+                    class="py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-sm transition">
+                    <i data-lucide="book-marked" class="w-4 h-4"></i>
+                    <span>1. Discipline e Argomenti</span>
+                </button>
+                <button type="button" id="t-tab-btn-2" onclick="switchTeacherTab(2)"
+                    class="py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span>2. Account Studenti</span>
+                </button>
+                <button type="button" id="t-tab-btn-3" onclick="switchTeacherTab(3)"
+                    class="py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                    <i data-lucide="layers" class="w-4 h-4"></i>
+                    <span>3. Mazzi e Carte delle Classi</span>
+                </button>
+                <button type="button" id="t-tab-btn-4" onclick="switchTeacherTab(4)"
+                    class="py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition">
+                    <i data-lucide="cloud-cog" class="w-4 h-4"></i>
+                    <span>4. Sicurezza e Database</span>
+                </button>
+            </div>
+
+            <!-- ----------------------------------------------------------- -->
+            <!-- SCHEDA DOCENTE 1: DISCIPLINE E ARGOMENTI (+ NUOVE CLASSI)   -->
+            <!-- ----------------------------------------------------------- -->
+            <div id="t-tab-1" class="space-y-5">
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900">Piano di Studi per Classe</h3>
+                        <p class="text-xs text-slate-500">Seleziona una classe o aggiungine una nuova: ogni classe gestisce discipline e argomenti separati.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div id="teacher-classes-pills" class="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1">
+                            <!-- Pulsanti classi renderizzati dinamicamente -->
+                        </div>
+
+                        <form onsubmit="handleAddClass(event)" class="flex items-center gap-1.5">
+                            <input type="text" id="new-class-input" maxlength="10" required placeholder="Nuova classe (es. 4A)"
+                                class="w-36 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-indigo-500">
+                            <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition shrink-0">
+                                + Classe
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Colonna Sinistra: Discipline della Classe -->
+                    <div class="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <h4 class="text-sm font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                            <i data-lucide="folder" class="w-4 h-4 text-indigo-600"></i>
+                            <span>Discipline — Classe <span id="curr-label-cls-1">1A</span></span>
+                        </h4>
+
+                        <form onsubmit="handleAddDiscipline(event)" class="flex gap-2">
+                            <input type="text" id="new-discipline-input" required placeholder="Nuova disciplina (es. Scienze)"
+                                class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shrink-0 transition">
+                                + Aggiungi
+                            </button>
+                        </form>
+
+                        <div id="teacher-disciplines-list" class="space-y-2">
+                            <!-- Renderizzato dinamicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Colonna Destra: Argomenti della Disciplina Selezionata -->
+                    <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <h4 class="text-sm font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                                <i data-lucide="list-checks" class="w-4 h-4 text-sky-600"></i>
+                                <span>Argomenti di <span id="curr-selected-disc-label" class="text-indigo-600">Matematica</span> (<span id="curr-label-cls-2">1A</span>)</span>
+                            </h4>
+                        </div>
+
+                        <form onsubmit="handleAddTopic(event)" class="flex gap-2">
+                            <input type="text" id="new-topic-input" required placeholder="Nuovo argomento..."
+                                class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                            <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs shrink-0 transition">
+                                + Aggiungi
+                            </button>
+                        </form>
+
+                        <div id="teacher-topics-list" class="space-y-2">
+                            <!-- Renderizzato dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ----------------------------------------------------------- -->
+            <!-- SCHEDA DOCENTE 2: ACCOUNT STUDENTI                          -->
+            <!-- ----------------------------------------------------------- -->
+            <div id="t-tab-2" class="hidden space-y-5">
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h3 class="text-base font-extrabold text-slate-900">Elenco Studenti</h3>
+                        <select id="teacher-students-class-filter" onchange="renderTeacherStudents()"
+                            class="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                            <option value="ALL">Tutte le Classi</option>
+                        </select>
+                    </div>
+                    <button type="button" onclick="openStudentModal()"
+                        class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-auto transition">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        <span>Aggiungi Studente</span>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                                    <th class="py-3.5 px-5">Nome e Cognome</th>
+                                    <th class="py-3.5 px-4">Classe</th>
+                                    <th class="py-3.5 px-4">Username</th>
+                                    <th class="py-3.5 px-4">Password</th>
+                                    <th class="py-3.5 px-5 text-right">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teacher-students-tbody" class="divide-y divide-slate-100 text-sm">
+                                <!-- Renderizzato dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ----------------------------------------------------------- -->
+            <!-- SCHEDA DOCENTE 3: MAZZI E CARTE DELLE CLASSI                -->
+            <!-- ----------------------------------------------------------- -->
+            <div id="t-tab-3" class="hidden space-y-5">
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                    <!-- Riga Filtri: Classe, Disciplina, Argomento, Ricerca -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <select id="teacher-cards-class-filter" onchange="onTeacherCardsClassFilterChange()"
+                            class="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+                            <option value="ALL">Tutte le Classi</option>
+                        </select>
+
+                        <select id="teacher-cards-discipline-filter" onchange="onTeacherCardsDisciplineFilterChange()"
+                            class="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+                            <option value="ALL">Tutte le Discipline</option>
+                        </select>
+
+                        <select id="teacher-cards-topic-filter" onchange="renderTeacherCards()"
+                            class="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+                            <option value="ALL">Tutti gli Argomenti</option>
+                        </select>
+
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                            </span>
+                            <input type="text" id="teacher-cards-search" oninput="renderTeacherCards()" placeholder="Cerca domanda, risposta o autore..."
+                                class="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800">
+                        </div>
+                    </div>
+
+                    <!-- Riga Azioni: Conteggio, Nuova Carta, Studio 3D Rapido, Backup JSON -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                        <span id="teacher-cards-count-badge" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-extrabold">
+                            0 carte
+                        </span>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="openTeacherCardModal()"
+                                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Nuova Carta</span>
+                            </button>
+
+                            <div class="flex items-center gap-1.5 bg-indigo-50 p-1 rounded-xl border border-indigo-200">
+                                <span class="text-[11px] font-bold text-indigo-800 pl-2">Avvia Studio 3D:</span>
+                                <select id="teacher-quick-study-class" class="bg-white border border-indigo-200 rounded-lg px-2 py-1 text-xs font-extrabold text-indigo-700">
+                                </select>
+                                <button type="button" onclick="launchTeacherClassStudy()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold transition">
+                                    Avvia
+                                </button>
+                            </div>
+
+                            <button type="button" onclick="exportTeacherJSON()"
+                                class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition">
+                                <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i>
+                                <span>Esporta Backup JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabella Gestione Carte Docente (UNICO PUNTO CON ELIMINAZIONE ATTIVA) -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                                    <th class="py-3.5 px-4">Classe</th>
+                                    <th class="py-3.5 px-4">Disciplina / Argomento</th>
+                                    <th class="py-3.5 px-4">Fronte (Domanda)</th>
+                                    <th class="py-3.5 px-4">Retro (Risposta)</th>
+                                    <th class="py-3.5 px-4">Autore</th>
+                                    <th class="py-3.5 px-5 text-right">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teacher-cards-tbody" class="divide-y divide-slate-100 text-sm">
+                                <!-- Renderizzato dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ----------------------------------------------------------- -->
+            <!-- SCHEDA DOCENTE 4: SICUREZZA E DATABASE                      -->
+            <!-- ----------------------------------------------------------- -->
+            <div id="t-tab-4" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- BLOCCO 1: CODICE BACKEND Code.gs -->
+                    <div class="lg:col-span-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                                    <i data-lucide="code-2" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">1. Codice Backend (Code.gs)</h3>
+                                    <p class="text-xs text-slate-500">Script server-side con autenticazione protetta</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="copyAppsScriptCode()"
+                                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
+                                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                <span>Copia Codice Backend (Code.gs)</span>
+                            </button>
+                        </div>
+
+                        <pre id="code-gs-preview" class="bg-slate-900 text-emerald-300 p-4 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-64 leading-relaxed select-all"></pre>
+
+                        <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-950 space-y-1">
+                            <p class="font-extrabold flex items-center gap-1.5 text-amber-900">
+                                <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                                <span>Pubblicazione Web App:</span>
+                            </p>
+                            <ol class="list-decimal pl-4 space-y-1">
+                                <li>Incolla il codice nell'editor Apps Script del tuo database e salva (<code class="bg-white px-1 rounded border">Ctrl+S</code>).</li>
+                                <li>Pubblica come <strong>App Web</strong> con accesso impostato su <strong>Chiunque</strong> e copia l'URL che termina con <code class="bg-white px-1 rounded border">/exec</code>.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- COLONNA DESTRA: BLOCCO 2 + BLOCCO 3 + BLOCCO 4 -->
+                    <div class="lg:col-span-6 space-y-6">
+                        <!-- BLOCCO 2: URL WEB APP (/exec) -->
+                        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                                        <i data-lucide="link" class="w-5 h-5"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">2. URL Web App (/exec)</h3>
+                                        <p class="text-xs text-slate-500">Indirizzo endpoint del backend</p>
+                                    </div>
+                                </div>
+                                <span id="gas-panel-status" class="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+                                    Locale Offline
+                                </span>
+                            </div>
+
+                            <div>
+                                <label for="gas-url-input" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Endpoint Web App (/exec)
+                                </label>
+                                <input type="url" id="gas-url-input" oninput="onGasUrlInput()" placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                                    class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white">
+                            </div>
+
+                            <div id="gas-url-validation-hint" class="hidden text-xs p-2.5 rounded-xl border font-medium"></div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <button type="button" onclick="testAndSaveGasConnection()"
+                                    class="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition">
+                                    <i data-lucide="plug-zap" class="w-4 h-4"></i>
+                                    <span>Testa e Salva Connessione</span>
+                                </button>
+                                <button type="button" onclick="openDiagnosticUrl()"
+                                    class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-300 transition">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                    <span>Verifica URL nel Browser</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BLOCCO 3: CREDENZIALI DOCENTE SUL SERVER -->
+                        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                                    <i data-lucide="key-round" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">3. Credenziali Docente sul Server</h3>
+                                    <p class="text-xs text-slate-500">Memorizzate esclusivamente sul server remoto (mai nel file HTML)</p>
+                                </div>
+                            </div>
+
+                            <form onsubmit="handleUpdateTeacherCredentials(event)" autocomplete="off" class="space-y-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="cfg-new-teacher-user" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                            Username Docente
+                                        </label>
+                                        <input type="text" id="cfg-new-teacher-user" required value="" autocomplete="off" placeholder="Imposta username"
+                                            class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label for="cfg-new-teacher-pass" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                            Password Docente
+                                        </label>
+                                        <input type="password" id="cfg-new-teacher-pass" required value="" autocomplete="new-password" placeholder="Imposta password"
+                                            class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                                    </div>
+                                </div>
+                                <button type="submit" id="btn-save-teacher-creds"
+                                    class="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition">
+                                    <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                                    <span>Salva Credenziali Docente sul Server</span>
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- BLOCCO 4: GENERA E SCARICA index.html SICURO PER GITHUB -->
+                        <div class="bg-emerald-50/70 p-6 rounded-3xl border border-emerald-200 space-y-3">
+                            <button type="button" onclick="downloadConfiguredHtml()"
+                                class="w-full py-3.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition">
+                                <i data-lucide="download-cloud" class="w-5 h-5"></i>
+                                <span>Genera e Scarica index.html per gli Studenti (Sicuro per GitHub)</span>
+                            </button>
+                            <p class="text-[11px] text-emerald-900 text-center leading-relaxed">
+                                Il file generato include esclusivamente l'endpoint <code class="font-mono">/exec</code> e zero credenziali nel codice sorgente.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- =================================================================== -->
+    <!-- PLAYER INTERATTIVO A SCHERMO INTERO: MODALITÀ STUDIO 3D             -->
+    <!-- =================================================================== -->
+    <div id="fullscreen-study-overlay" class="hidden fixed inset-0 z-40 bg-slate-50/95 backdrop-blur-md flex flex-col overflow-y-auto">
+        <!-- Barra Superiore Player 3D -->
+        <div class="bg-white border-b border-slate-200 px-4 sm:px-8 h-16 flex items-center justify-between shrink-0 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h3 class="font-extrabold text-slate-900 text-sm sm:text-base">
+                        Modalità Studio 3D — Classe <span id="study-overlay-class">---</span>
+                    </h3>
+                    <p id="study-overlay-filter-info" class="text-[11px] text-slate-500 font-medium">
+                        Tutte le discipline • Tutti gli argomenti
+                    </p>
+                </div>
+            </div>
+
+            <button type="button" onclick="closeFullscreenStudy()"
+                class="px-3.5 py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+                <span>Chiudi Studio 3D</span>
+            </button>
+        </div>
+
+        <!-- Corpo Centrale Player 3D -->
+        <div class="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col items-center justify-center">
+            <!-- Barra Progresso e Contatori -->
+            <div class="w-full bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="w-full flex-1">
+                    <div class="flex justify-between text-xs font-bold text-slate-600 mb-1.5">
+                        <span>Avanzamento Sessione</span>
+                        <span id="study-counter-label">Carta 0 di 0</span>
+                    </div>
+                    <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="study-progress-fill" class="h-full bg-indigo-600 transition-all duration-300 w-0"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <div class="text-center px-3 py-1 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <span id="study-stat-learned" class="text-base font-extrabold text-emerald-700 block leading-none">0</span>
+                        <span class="text-[10px] font-bold uppercase text-emerald-600">Imparata</span>
+                    </div>
+                    <div class="text-center px-3 py-1 bg-rose-50 rounded-xl border border-rose-200">
+                        <span id="study-stat-review" class="text-base font-extrabold text-rose-700 block leading-none">0</span>
+                        <span class="text-[10px] font-bold uppercase text-rose-600">Da ripassare</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Carta 3D Interattiva -->
+            <div class="w-full perspective-1000 my-1">
+                <div id="study-card-3d" onclick="flipStudyCard()"
+                    class="transform-style-3d cursor-pointer relative min-h-[320px] sm:min-h-[360px] w-full rounded-3xl bg-white border border-slate-200 shadow-xl hover:shadow-2xl transition-shadow p-6 sm:p-8 select-none">
+
+                    <!-- FRONTE -->
+                    <div class="backface-hidden w-full h-full min-h-[265px] sm:min-h-[295px] flex flex-col justify-between">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span id="study-badge-discipline" class="text-xs font-extrabold uppercase px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Disciplina
+                                </span>
+                                <span id="study-badge-topic" class="text-xs font-bold px-3 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                                    Argomento
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="speakStudyCard(event, 'front')"
+                                    class="p-2.5 rounded-full bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 transition" title="Ascolta fronte in italiano">
+                                    <i data-lucide="volume-2" class="w-4 h-4"></i>
+                                </button>
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Fronte</span>
+                            </div>
+                        </div>
+
+                        <div class="my-auto py-6 text-center">
+                            <p id="study-text-front" class="text-xl sm:text-2xl font-extrabold text-slate-800 leading-snug">
+                                Nessuna carta disponibile
+                            </p>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs text-slate-400 font-semibold pt-2 border-t border-slate-100">
+                            <span id="study-badge-author">Autore: ---</span>
+                            <span class="flex items-center gap-1 text-indigo-600">
+                                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                                Clicca o premi SPAZIO per girare
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- RETRO -->
+                    <div class="backface-hidden rotate-y-180 absolute inset-0 p-6 sm:p-8 flex flex-col justify-between bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-extrabold uppercase px-3 py-1 rounded-full bg-white/15 text-indigo-200">
+                                Risposta
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="speakStudyCard(event, 'back')"
+                                    class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition" title="Ascolta retro in italiano">
+                                    <i data-lucide="volume-2" class="w-4 h-4"></i>
+                                </button>
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Retro</span>
+                            </div>
+                        </div>
+
+                        <div class="my-auto py-6 text-center">
+                            <p id="study-text-back" class="text-lg sm:text-xl font-medium text-slate-100 leading-relaxed">
+                                ---
+                            </p>
+                        </div>
+
+                        <div class="text-center text-xs text-slate-400 font-semibold pt-2 border-t border-white/10">
+                            Clicca o premi SPAZIO per tornare alla domanda
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controlli Navigazione: Precedente / Gira / Successiva / Mescola -->
+            <div class="w-full mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                <button type="button" onclick="navigateStudyCard(-1)"
+                    class="px-4 py-3 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl shadow-sm transition flex items-center gap-1.5 text-xs sm:text-sm">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    <span>Precedente</span>
+                </button>
+
+                <button type="button" onclick="flipStudyCard()"
+                    class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl shadow-md shadow-indigo-500/20 transition flex items-center gap-1.5 text-xs sm:text-sm">
+                    <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                    <span>Gira</span>
+                </button>
+
+                <button type="button" onclick="navigateStudyCard(1)"
+                    class="px-4 py-3 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl shadow-sm transition flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>Successiva</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+
+                <button type="button" onclick="shuffleStudySession()"
+                    class="px-4 py-3 bg-white border border-slate-300 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 font-bold rounded-2xl shadow-sm transition flex items-center gap-1.5 text-xs sm:text-sm">
+                    <i data-lucide="shuffle" class="w-4 h-4"></i>
+                    <span>Mescola</span>
+                </button>
+            </div>
+
+            <!-- Pulsanti Autovalutazione e Riepilogo -->
+            <div class="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                <button type="button" onclick="rateStudyCard(false)"
+                    class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-extrabold rounded-xl text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    <span>Da ripassare</span>
+                </button>
+                <button type="button" onclick="rateStudyCard(true)"
+                    class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    <span>Imparata</span>
+                </button>
+                <button type="button" onclick="openStudySummaryModal()"
+                    class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="award" class="w-4 h-4 text-amber-400"></i>
+                    <span>Concludi Studio</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODALE 1: LOGIN AREA DOCENTI (CAMPI SEMPRE VUOTI)                   -->
+    <!-- =================================================================== -->
+    <div id="modal-teacher-login" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100">
+            <div class="text-center">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="shield" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-xl font-extrabold text-slate-900">Accesso Area Docenti</h3>
+                <p class="text-xs text-slate-500 mt-1">Le credenziali docenti vengono verificate direttamente sul server.</p>
+            </div>
+
+            <!-- Link/Pulsante Configurazione Iniziale Database se GAS_URL è vuoto -->
+            <div id="teacher-offline-setup-box" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-3">
+                <p class="font-bold flex items-center gap-1.5 text-amber-900">
+                    <i data-lucide="wrench" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                    <span>Database non ancora configurato</span>
+                </p>
+                <p class="leading-relaxed">
+                    Nessun endpoint backend rilevato. Apri la configurazione iniziale per collegare l'URL <code class="bg-white px-1 rounded border">/exec</code> e impostare le credenziali docente.
+                </p>
+                <button type="button" onclick="enterOfflineTeacherSetup()"
+                    class="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs transition">
+                    Configurazione Iniziale Database
+                </button>
+            </div>
+
+            <form id="teacher-login-form" onsubmit="submitTeacherLogin(event)" autocomplete="off" class="space-y-4">
+                <div>
+                    <label for="teacher-login-user" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Username Docente
+                    </label>
+                    <input type="text" id="teacher-login-user" value="" required autocomplete="off" placeholder="Inserisci username docente"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="teacher-login-pass" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Password Docente
+                    </label>
+                    <input type="password" id="teacher-login-pass" value="" required autocomplete="new-password" placeholder="Inserisci password docente"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModalById('modal-teacher-login')"
+                        class="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Annulla
+                    </button>
+                    <button type="submit" id="btn-teacher-login-submit"
+                        class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition">
+                        Accedi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODALE 2: AGGIUNGI / MODIFICA STUDENTE (DOCENTE)                    -->
+    <!-- =================================================================== -->
+    <div id="modal-student-form" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-slate-100">
+            <h3 id="student-modal-title" class="text-lg font-extrabold text-slate-900">Nuovo Account Studente</h3>
+
+            <form onsubmit="handleSaveStudentAccount(event)" autocomplete="off" class="space-y-4">
+                <input type="hidden" id="edit-student-id" value="">
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Nome Completo</label>
+                    <input type="text" id="edit-student-fullname" required placeholder="es. Elena Neri"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Classe Assegnata</label>
+                    <select id="edit-student-class" required
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold">
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Username</label>
+                    <input type="text" id="edit-student-username" required autocomplete="off" placeholder="es. elena.neri"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Password</label>
+                    <input type="text" id="edit-student-password" autocomplete="off" placeholder="Imposta password"
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+                    <p id="edit-student-password-hint" class="hidden text-[11px] text-slate-500 mt-1">
+                        Lascia <code class="bg-slate-100 px-1 rounded">***</code> per mantenere invariata la password sul server, oppure inserisci una nuova password.
+                    </p>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModalById('modal-student-form')"
+                        class="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Annulla
+                    </button>
+                    <button type="submit" id="btn-save-student-submit"
+                        class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition">
+                        Salva Studente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODALE 3: AGGIUNGI / MODIFICA CARTA DAL PANNELLO DOCENTE            -->
+    <!-- =================================================================== -->
+    <div id="modal-teacher-card" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-4 border border-slate-100">
+            <h3 id="t-card-modal-title" class="text-lg font-extrabold text-slate-900">Nuova Flashcard (Docente)</h3>
+
+            <form onsubmit="handleSaveTeacherCard(event)" class="space-y-4">
+                <input type="hidden" id="t-card-edit-id" value="">
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Classe</label>
+                        <select id="t-card-class" onchange="populateTeacherCardDisciplineSelect()"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Disciplina</label>
+                        <select id="t-card-discipline" onchange="populateTeacherCardTopicSelect()"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Argomento</label>
+                        <select id="t-card-topic"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fronte (Domanda)</label>
+                    <textarea id="t-card-front" required rows="3" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm resize-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Retro (Risposta)</label>
+                    <textarea id="t-card-back" required rows="3" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm resize-none"></textarea>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModalById('modal-teacher-card')"
+                        class="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Annulla
+                    </button>
+                    <button type="submit" id="btn-save-teacher-card"
+                        class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md transition">
+                        Salva Flashcard
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODALE 4: RIEPILOGO FINE STUDIO                                     -->
+    <!-- =================================================================== -->
+    <div id="modal-study-summary" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 border border-slate-100 text-center">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                <i data-lucide="trophy" class="w-7 h-7"></i>
+            </div>
+
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-900">Riepilogo Sessione</h3>
+                <p id="summary-ratio-text" class="text-base font-bold text-indigo-600 mt-1">
+                    0 su 0 imparate
+                </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+                    <span id="summary-pct-learned" class="text-2xl font-extrabold text-emerald-700 block">0%</span>
+                    <span class="text-xs font-bold text-emerald-600">imparate</span>
+                </div>
+                <div class="p-4 rounded-2xl bg-rose-50 border border-rose-200">
+                    <span id="summary-pct-review" class="text-2xl font-extrabold text-rose-700 block">0%</span>
+                    <span class="text-xs font-bold text-rose-600">da ripassare</span>
+                </div>
+            </div>
+
+            <button type="button" onclick="finishStudyAndClose()"
+                class="w-full py-3.5 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-indigo-500/25 transition">
+                OK / Chiudi Studio
+            </button>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODALE 5: DIALOGO PERSONALIZZATO (AVVISI / CONFERME / RINOMINA)     -->
+    <!-- =================================================================== -->
+    <div id="modal-dialog" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <h4 id="dialog-title" class="text-lg font-extrabold text-slate-900">Avviso</h4>
+            <p id="dialog-message" class="text-sm text-slate-600 leading-relaxed whitespace-pre-line">---</p>
+            <div id="dialog-input-wrapper" class="hidden">
+                <input type="text" id="dialog-input" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm">
+            </div>
+            <div id="dialog-actions" class="flex justify-end gap-2 pt-2">
+                <!-- Pulsanti dinamici -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICA RAPIDA -->
+    <div id="toast-banner" class="hidden fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-2.5 text-xs font-bold">
+        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+        <span id="toast-message">Operazione completata</span>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- TEMPLATE CODICE BACKEND (Code.gs - ZERO CREDENZIALI IN HTML)        -->
+    <!-- =================================================================== -->
+    <script type="text/plain" id="apps-script-template">
+// ============================================================================
+// FLASHCARDCLASS - BACKEND SERVER (Code.gs)
+// ============================================================================
+// 1. Incolla questo codice in Estensioni -> Apps Script del tuo foglio di calcolo.
+// 2. Salva (Ctrl+S) e pubblica come App Web (Esegui come: Me, Accesso: Chiunque).
+// 3. Imposta username e password docente dalla Scheda 4 dell'applicazione.
+// ============================================================================
+
+function doGet(e) {
+  try {
+    var ss = getSpreadsheet_();
+    ensureSheets_(ss);
+
+    // Esclude 'Config' e maschera tutte le password studenti con '***'
+    var safeStudents = readStudents_(ss).map(function(s) {
+      return {
+        id: s.id,
+        name: s.name,
+        username: s.username,
+        password: '***',
+        className: s.className
+      };
+    });
+
+    return jsonOut_({
+      status: 'ok',
+      message: 'Connessione attiva! Backend pronto (doGet e doPost attivi).',
+      students: safeStudents,
+      cards: readCards_(ss),
+      curriculum: readCurriculum_(ss)
+    });
+  } catch (err) {
+    return jsonOut_({
+      status: 'error',
+      message: 'Errore server in doGet: ' + (err && err.message ? err.message : String(err))
+    });
+  }
+}
+
+function doPost(e) {
+  var lock = null;
+  try {
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(15000)) {
+      return jsonOut_({
+        status: 'error',
+        message: 'Server occupato da un altro salvataggio, riprova tra qualche secondo.'
+      });
+    }
+
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    var req = JSON.parse(raw);
+    var action = String(req.action || '').trim();
+
+    var ss = getSpreadsheet_();
+    ensureSheets_(ss);
+
+    // 1. VERIFICA LOGIN LATO SERVER (DOCENTE O STUDENTE)
+    if (action === 'verifyLogin') {
+      var role = String(req.role || '').trim();
+      var user = String(req.username || '').trim();
+      var pass = String(req.password || '').trim();
+
+      if (role === 'teacher') {
+        var cfg = readConfigMap_(ss);
+        var validUser = String(cfg.teacherUsername || '').trim();
+        var validPass = String(cfg.teacherPassword || '').trim();
+        var isTeacherOk = (
+          validUser !== '' &&
+          validPass !== '' &&
+          validUser !== 'IMPOSTA_USERNAME' &&
+          validPass !== 'IMPOSTA_PASSWORD' &&
+          user === validUser &&
+          pass === validPass
+        );
+        return jsonOut_({ status: 'ok', valid: isTeacherOk });
+      }
+
+      if (role === 'student') {
+        var students = readStudents_(ss);
+        for (var i = 0; i < students.length; i++) {
+          if (
+            students[i].username.toLowerCase() === user.toLowerCase() &&
+            students[i].password === pass &&
+            pass !== '' &&
+            pass !== '***'
+          ) {
+            return jsonOut_({
+              status: 'ok',
+              valid: true,
+              student: {
+                id: students[i].id,
+                name: students[i].name,
+                username: students[i].username,
+                className: students[i].className
+              }
+            });
+          }
+        }
+        return jsonOut_({ status: 'ok', valid: false });
+      }
+
+      return jsonOut_({ status: 'error', message: 'Ruolo non valido.' });
+    }
+
+    // 2. IMPOSTA / AGGIORNA CREDENZIALI DOCENTE NELLA SCHEDA 'Config'
+    if (action === 'setTeacherCredentials') {
+      var cfgMap = readConfigMap_(ss);
+      var oldUser = String(cfgMap.teacherUsername || '').trim();
+      var oldPass = String(cfgMap.teacherPassword || '').trim();
+      var isInitialSetup = (
+        oldUser === '' ||
+        oldPass === '' ||
+        oldUser === 'IMPOSTA_USERNAME' ||
+        oldPass === 'IMPOSTA_PASSWORD'
+      );
+
+      var curUser = String(req.currentUsername || '').trim();
+      var curPass = String(req.currentPassword || '').trim();
+
+      if (!isInitialSetup && (curUser !== oldUser || curPass !== oldPass)) {
+        return jsonOut_({
+          status: 'error',
+          message: 'Credenziali docenti attuali non valide.'
+        });
+      }
+
+      var newUser = String(req.newUsername || '').trim();
+      var newPass = String(req.newPassword || '').trim();
+      if (!newUser || !newPass) {
+        return jsonOut_({
+          status: 'error',
+          message: 'Username e password docente obbligatori.'
+        });
+      }
+
+      writeTeacherCredentials_(ss, newUser, newPass);
+      return jsonOut_({
+        status: 'ok',
+        message: 'Credenziali docenti salvate sul server.'
+      });
+    }
+
+    // 3. SINCRONIZZAZIONE COMPLETA (Studenti, Flashcard, Curriculum)
+    if (action === 'syncAll') {
+      if (Array.isArray(req.students)) {
+        writeStudentsPreservePasswords_(ss, req.students);
+      }
+      if (Array.isArray(req.cards)) {
+        writeCards_(ss, req.cards);
+      }
+      if (req.curriculum && typeof req.curriculum === 'object') {
+        writeCurriculum_(ss, req.curriculum);
+      }
+      return jsonOut_({
+        status: 'ok',
+        message: 'Sincronizzazione completata.'
+      });
+    }
+
+    return jsonOut_({
+      status: 'error',
+      message: 'Azione non riconosciuta: ' + action
+    });
+  } catch (err) {
+    return jsonOut_({
+      status: 'error',
+      message: 'Errore server in doPost: ' + (err && err.message ? err.message : String(err))
+    });
+  } finally {
+    if (lock) {
+      try { lock.releaseLock(); } catch (e2) {}
+    }
+  }
+}
+
+function getSpreadsheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+
+  var props = PropertiesService.getScriptProperties();
+  var savedId = props.getProperty('FLASHCARD_SS_ID');
+  if (savedId) {
+    try {
+      return SpreadsheetApp.openById(savedId);
+    } catch (e) {}
+  }
+  var created = SpreadsheetApp.create('Database FlashcardClass');
+  props.setProperty('FLASHCARD_SS_ID', created.getId());
+  return created;
+}
+
+function jsonOut_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function ensureSheets_(ss) {
+  var specs = [
+    { name: 'Studenti', headers: ['id', 'name', 'username', 'password', 'className'] },
+    { name: 'Flashcard', headers: ['id', 'className', 'discipline', 'topic', 'front', 'back', 'author', 'createdAt'] },
+    { name: 'Curriculum', headers: ['className', 'discipline', 'topic'] },
+    { name: 'Config', headers: ['Chiave', 'Valore'] }
+  ];
+
+  for (var i = 0; i < specs.length; i++) {
+    var sheet = ss.getSheetByName(specs[i].name);
+    if (!sheet) {
+      sheet = ss.insertSheet(specs[i].name);
+      sheet.appendRow(specs[i].headers);
+      sheet.getRange(1, 1, 1, specs[i].headers.length).setFontWeight('bold');
+      if (specs[i].name === 'Config') {
+        sheet.appendRow(['teacherUsername', 'IMPOSTA_USERNAME']);
+        sheet.appendRow(['teacherPassword', 'IMPOSTA_PASSWORD']);
+      }
+    } else if (sheet.getLastRow() === 0) {
+      sheet.appendRow(specs[i].headers);
+    }
+  }
+}
+
+function readConfigMap_(ss) {
+  var sheet = ss.getSheetByName('Config');
+  var rows = sheet.getDataRange().getValues();
+  var map = {};
+  for (var i = 1; i < rows.length; i++) {
+    var k = String(rows[i][0] || '').trim();
+    if (k) map[k] = String(rows[i][1] || '').trim();
+  }
+  return map;
+}
+
+function writeTeacherCredentials_(ss, username, password) {
+  var sheet = ss.getSheetByName('Config');
+  var rows = sheet.getDataRange().getValues();
+  var updatedUser = false;
+  var updatedPass = false;
+
+  for (var i = 1; i < rows.length; i++) {
+    var key = String(rows[i][0] || '').trim();
+    if (key === 'teacherUsername') {
+      sheet.getRange(i + 1, 2).setValue(username);
+      updatedUser = true;
+    } else if (key === 'teacherPassword') {
+      sheet.getRange(i + 1, 2).setValue(password);
+      updatedPass = true;
+    }
+  }
+  if (!updatedUser) sheet.appendRow(['teacherUsername', username]);
+  if (!updatedPass) sheet.appendRow(['teacherPassword', password]);
+}
+
+function readStudents_(ss) {
+  var sheet = ss.getSheetByName('Studenti');
+  var rows = sheet.getDataRange().getValues();
+  var list = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (!rows[i][0] && !rows[i][2]) continue;
+    list.push({
+      id: String(rows[i][0] || ('stu_' + i)),
+      name: String(rows[i][1] || ''),
+      username: String(rows[i][2] || '').trim(),
+      password: String(rows[i][3] || '').trim(),
+      className: String(rows[i][4] || '').trim()
+    });
+  }
+  return list;
+}
+
+function writeStudentsPreservePasswords_(ss, incomingList) {
+  var existing = readStudents_(ss);
+  var passById = {};
+  var passByUser = {};
+  for (var i = 0; i < existing.length; i++) {
+    passById[existing[i].id] = existing[i].password;
+    passByUser[existing[i].username.toLowerCase()] = existing[i].password;
+  }
+
+  var sheet = ss.getSheetByName('Studenti');
+  sheet.clearContents();
+  sheet.appendRow(['id', 'name', 'username', 'password', 'className']);
+
+  if (incomingList && incomingList.length > 0) {
+    var rows = incomingList.map(function(s) {
+      var uLower = String(s.username || '').trim().toLowerCase();
+      var finalPass = String(s.password || '').trim();
+      if (finalPass === '***' || finalPass === '') {
+        finalPass = passById[s.id] || passByUser[uLower] || '';
+      }
+      return [s.id, s.name, s.username, finalPass, s.className];
+    });
+    sheet.getRange(2, 1, rows.length, 5).setValues(rows);
+  }
+}
+
+function readCards_(ss) {
+  var sheet = ss.getSheetByName('Flashcard');
+  var rows = sheet.getDataRange().getValues();
+  var list = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    list.push({
+      id: String(rows[i][0]),
+      className: String(rows[i][1] || ''),
+      discipline: String(rows[i][2] || ''),
+      topic: String(rows[i][3] || ''),
+      front: String(rows[i][4] || ''),
+      back: String(rows[i][5] || ''),
+      author: String(rows[i][6] || ''),
+      createdAt: String(rows[i][7] || '')
+    });
+  }
+  return list;
+}
+
+function writeCards_(ss, list) {
+  var sheet = ss.getSheetByName('Flashcard');
+  sheet.clearContents();
+  sheet.appendRow(['id', 'className', 'discipline', 'topic', 'front', 'back', 'author', 'createdAt']);
+  if (list && list.length > 0) {
+    var rows = list.map(function(c) {
+      return [c.id, c.className, c.discipline, c.topic, c.front, c.back, c.author, c.createdAt || ''];
+    });
+    sheet.getRange(2, 1, rows.length, 8).setValues(rows);
+  }
+}
+
+function readCurriculum_(ss) {
+  var sheet = ss.getSheetByName('Curriculum');
+  var rows = sheet.getDataRange().getValues();
+  var curr = {};
+  for (var i = 1; i < rows.length; i++) {
+    var cls = String(rows[i][0] || '').trim();
+    var disc = String(rows[i][1] || '').trim();
+    var topic = String(rows[i][2] || '').trim();
+    if (!cls || !disc) continue;
+    if (!curr[cls]) curr[cls] = {};
+    if (!curr[cls][disc]) curr[cls][disc] = [];
+    if (topic && curr[cls][disc].indexOf(topic) === -1) {
+      curr[cls][disc].push(topic);
+    }
+  }
+  return curr;
+}
+
+function writeCurriculum_(ss, curr) {
+  var sheet = ss.getSheetByName('Curriculum');
+  sheet.clearContents();
+  sheet.appendRow(['className', 'discipline', 'topic']);
+  var rows = [];
+  var classes = Object.keys(curr || {});
+  for (var i = 0; i < classes.length; i++) {
+    var cls = classes[i];
+    var discs = Object.keys(curr[cls] || {});
+    for (var j = 0; j < discs.length; j++) {
+      var disc = discs[j];
+      var topics = curr[cls][disc] || [];
+      if (topics.length === 0) {
+        rows.push([cls, disc, '']);
+      } else {
+        for (var k = 0; k < topics.length; k++) {
+          rows.push([cls, disc, topics[k]]);
+        }
+      }
+    }
+  }
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+  }
+}
+    </script>
+
+    <!-- =================================================================== -->
+    <!-- LOGICA APPLICAZIONE JAVASCRIPT (ZERO CREDENZIALI NEL CODICE HTML)   -->
+    <!-- =================================================================== -->
+    <script>
+        // =========================================================================
+        // UNICA COSTANTE CONFIGURABILE (ENDPOINT BACKEND /exec)
+        // Nessun username o password è presente in questo file.
+        // =========================================================================
+        const DEFAULT_GAS_URL = "";
+        // =========================================================================
+
+        const STORAGE_KEYS = {
+            GAS_URL: 'fc_app_gas_url_v2',
+            STUDENTS: 'fc_app_students_v2',
+            CARDS: 'fc_app_cards_v2',
+            CURRICULUM: 'fc_app_curriculum_v2'
+        };
+
+        // Cattura il sorgente HTML pulito prima di qualsiasi manipolazione DOM
+        let PRISTINE_HTML_TEMPLATE = "";
+
+        // Flag autenticazione docente (controllato anche da deleteCard)
+        let isTeacherAuthenticated = false;
+
+        // Stato globale dell'applicazione
+        const state = {
+            gasUrl: DEFAULT_GAS_URL || localStorage.getItem(STORAGE_KEYS.GAS_URL) || "",
+            isOnline: false,
+            isSyncing: false,
+            currentStudent: null,
+            teacherSessionUser: "",
+            teacherSessionPass: "",
+            teacherPreviewClass: null,
+            classes: ['1A', '2A', '3A'],
+            students: [],
+            cards: [],
+            curriculum: {},
+            // Stato Studio 3D
+            studyDeck: [],
+            studyIndex: 0,
+            studyFlipped: false,
+            studyResults: {},
+            // Stato Pannello Docente
+            teacherActiveTab: 1,
+            curriculumSelectedClass: '1A',
+            curriculumSelectedDiscipline: 'Matematica'
+        };
+
+        function getDefaultCurriculum() {
+            return {
+                '1A': {
+                    'Matematica': ['Numeri Naturali e Potenze', 'Frazioni e Numeri Razionali', 'Enti Geometrici Fondamentali']
+                },
+                '2A': {
+                    'Matematica': ['Teorema di Pitagora', 'Rapporti e Proporzioni', 'Piano Cartesiano']
+                },
+                '3A': {
+                    'Matematica': ['Equazioni di Primo Grado', 'Calcolo Letterale e Monomi', 'Circonferenza e Cerchio']
+                }
+            };
+        }
+
+        // =========================================================================
+        // INIZIALIZZAZIONE
+        // =========================================================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            PRISTINE_HTML_TEMPLATE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            lucide.createIcons();
+
+            const codePreview = document.getElementById('code-gs-preview');
+            if (codePreview) {
+                codePreview.textContent = document.getElementById('apps-script-template').textContent.trim();
+            }
+
+            clearAllLoginInputs();
+            loadLocalCache();
+            syncClassList();
+            updateConnectionUI(false, false);
+
+            // Scorciatoie da tastiera per il Player Studio 3D (Spazio, Frecce, Esc)
+            document.addEventListener('keydown', (e) => {
+                const overlay = document.getElementById('fullscreen-study-overlay');
+                if (!overlay || overlay.classList.contains('hidden')) return;
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    flipStudyCard();
+                } else if (e.code === 'ArrowRight') {
+                    navigateStudyCard(1);
+                } else if (e.code === 'ArrowLeft') {
+                    navigateStudyCard(-1);
+                } else if (e.code === 'Escape') {
+                    closeFullscreenStudy();
+                }
+            });
+
+            if (state.gasUrl) {
+                document.getElementById('gas-url-input').value = state.gasUrl;
+                await fetchCloudData(true);
+            }
+        });
+
+        function clearAllLoginInputs() {
+            ['login-username', 'login-password', 'teacher-login-user', 'teacher-login-pass'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+        }
+
+        function loadLocalCache() {
+            try {
+                const s = JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENTS));
+                const c = JSON.parse(localStorage.getItem(STORAGE_KEYS.CARDS));
+                const curr = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRICULUM));
+
+                state.students = Array.isArray(s) ? s : [];
+                state.cards = Array.isArray(c) ? c : [];
+                state.curriculum = (curr && typeof curr === 'object' && Object.keys(curr).length > 0)
+                    ? curr
+                    : getDefaultCurriculum();
+            } catch (err) {
+                state.students = [];
+                state.cards = [];
+                state.curriculum = getDefaultCurriculum();
+            }
+            syncClassList();
+        }
+
+        function saveLocalCache() {
+            const maskedStudents = state.students.map(s => ({ ...s, password: '***' }));
+            localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(maskedStudents));
+            localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(state.cards));
+            localStorage.setItem(STORAGE_KEYS.CURRICULUM, JSON.stringify(state.curriculum));
+        }
+
+        function syncClassList() {
+            const set = new Set(['1A', '2A', '3A']);
+            Object.keys(state.curriculum || {}).forEach(c => { if (c) set.add(c); });
+            state.students.forEach(s => { if (s.className) set.add(s.className); });
+            state.cards.forEach(c => { if (c.className) set.add(c.className); });
+            state.classes = Array.from(set);
+
+            state.classes.forEach(cls => {
+                if (!state.curriculum[cls]) {
+                    state.curriculum[cls] = { 'Matematica': ['Argomento generale'] };
+                }
+                if (Object.keys(state.curriculum[cls]).length === 0) {
+                    state.curriculum[cls]['Matematica'] = ['Argomento generale'];
+                }
+            });
+            populateAllClassDropdowns();
+        }
+
+        function populateAllClassDropdowns() {
+            const optionsHtml = state.classes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            const classOptionsHtml = state.classes.map(c => `<option value="${escapeHtml(c)}">Classe ${escapeHtml(c)}</option>`).join('');
+
+            const stuFilter = document.getElementById('teacher-students-class-filter');
+            if (stuFilter) {
+                const prev = stuFilter.value || 'ALL';
+                stuFilter.innerHTML = `<option value="ALL">Tutte le Classi</option>` + classOptionsHtml;
+                if ([...stuFilter.options].some(o => o.value === prev)) stuFilter.value = prev;
+            }
+
+            const cardsFilter = document.getElementById('teacher-cards-class-filter');
+            if (cardsFilter) {
+                const prev = cardsFilter.value || 'ALL';
+                cardsFilter.innerHTML = `<option value="ALL">Tutte le Classi</option>` + classOptionsHtml;
+                if ([...cardsFilter.options].some(o => o.value === prev)) cardsFilter.value = prev;
+            }
+
+            const quickStudy = document.getElementById('teacher-quick-study-class');
+            if (quickStudy) {
+                const prev = quickStudy.value;
+                quickStudy.innerHTML = optionsHtml;
+                if (state.classes.includes(prev)) quickStudy.value = prev;
+            }
+
+            const editStuCls = document.getElementById('edit-student-class');
+            if (editStuCls) {
+                const prev = editStuCls.value;
+                editStuCls.innerHTML = optionsHtml;
+                if (state.classes.includes(prev)) editStuCls.value = prev;
+            }
+
+            const tCardCls = document.getElementById('t-card-class');
+            if (tCardCls) {
+                const prev = tCardCls.value;
+                tCardCls.innerHTML = optionsHtml;
+                if (state.classes.includes(prev)) tCardCls.value = prev;
+            }
+        }
+
+        // =========================================================================
+        // VALIDAZIONE ENDPOINT & SINCRONIZZAZIONE CON IL DATABASE REMOTO
+        // =========================================================================
+        function validateAppsScriptUrl(rawUrl) {
+            const url = (rawUrl || "").trim();
+            if (!url) {
+                return {
+                    valid: false,
+                    title: "URL mancante",
+                    message: "Inserisci l'URL della Web App (che termina con /exec) prima di continuare."
+                };
+            }
+            if (url.includes("docs.google.com/spreadsheets")) {
+                return {
+                    valid: false,
+                    title: "Indirizzo non valido",
+                    message: "Hai inserito l'indirizzo del foglio di calcolo. Copia l'URL della Web App distribuita che termina con /exec."
+                };
+            }
+            if (url.includes("/edit") || url.includes("/home/")) {
+                return {
+                    valid: false,
+                    title: "Indirizzo editor non valido",
+                    message: "Pubblica la Web App e copia l'URL pubblico che termina con /exec."
+                };
+            }
+            if (/\/dev(\?.*)?$/i.test(url)) {
+                return {
+                    valid: false,
+                    title: "URL di prova (/dev) non consentito",
+                    message: "Copia l'URL definitivo della distribuzione che termina con /exec (non /dev)."
+                };
+            }
+            const execRegex = /^https:\/\/script\.google\.com\/(a\/macros\/[^/]+\/)?macros\/s\/[a-zA-Z0-9_-]+\/exec(\?.*)?$/;
+            if (!execRegex.test(url)) {
+                return {
+                    valid: false,
+                    title: "Formato URL non valido",
+                    message: "L'URL deve iniziare con https://script.google.com/macros/s/ e terminare con /exec."
+                };
+            }
+            return { valid: true, url };
+        }
+
+        function onGasUrlInput() {
+            const input = document.getElementById('gas-url-input');
+            const hint = document.getElementById('gas-url-validation-hint');
+            if (!input || !hint) return;
+            const val = input.value.trim();
+            if (!val) {
+                hint.classList.add('hidden');
+                return;
+            }
+            const check = validateAppsScriptUrl(val);
+            hint.classList.remove('hidden');
+            if (check.valid) {
+                hint.className = "text-xs p-2.5 rounded-xl border font-medium bg-emerald-50 border-emerald-200 text-emerald-800";
+                hint.textContent = "✓ Formato URL /exec valido. Premi 'Testa e Salva Connessione'.";
+            } else {
+                hint.className = "text-xs p-2.5 rounded-xl border font-medium bg-rose-50 border-rose-200 text-rose-800";
+                hint.textContent = `⚠ ${check.title}: ${check.message}`;
+            }
+        }
+
+        function updateConnectionUI(isOnline, isSyncing) {
+            state.isOnline = isOnline;
+            state.isSyncing = isSyncing;
+
+            const badge = document.getElementById('connection-badge');
+            const dot = document.getElementById('connection-dot');
+            const label = document.getElementById('connection-label');
+            const subtext = document.getElementById('header-sync-subtext');
+            const syncIcon = document.getElementById('sync-icon');
+            const gasPanelStatus = document.getElementById('gas-panel-status');
+            const offlineNotice = document.getElementById('login-offline-notice');
+
+            if (isSyncing) {
+                subtext.textContent = "Sincronizzazione in corso...";
+                subtext.className = "text-[11px] text-indigo-600 font-bold mt-0.5 animate-pulse";
+                if (syncIcon) syncIcon.classList.add('animate-spin');
+            } else {
+                subtext.textContent = "Mazzo Collaborativo di Classe";
+                subtext.className = "text-[11px] text-slate-500 font-medium mt-0.5";
+                if (syncIcon) syncIcon.classList.remove('animate-spin');
+            }
+
+            if (isOnline) {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors";
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+                label.textContent = "Online";
+                if (offlineNotice) offlineNotice.classList.add('hidden');
+                if (gasPanelStatus) {
+                    gasPanelStatus.textContent = "Online";
+                    gasPanelStatus.className = "px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200";
+                }
+            } else {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 transition-colors";
+                dot.className = "w-2 h-2 rounded-full bg-amber-500";
+                label.textContent = "Locale Offline";
+                if (offlineNotice) offlineNotice.classList.toggle('hidden', Boolean(state.gasUrl));
+                if (gasPanelStatus) {
+                    gasPanelStatus.textContent = "Locale Offline";
+                    gasPanelStatus.className = "px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-700 border border-amber-200";
+                }
+            }
+        }
+
+        async function fetchCloudData(silent = false) {
+            if (!state.gasUrl) {
+                updateConnectionUI(false, false);
+                return false;
+            }
+
+            const validation = validateAppsScriptUrl(state.gasUrl);
+            if (!validation.valid) {
+                updateConnectionUI(false, false);
+                if (!silent) showDialog(validation.title, validation.message);
+                return false;
+            }
+
+            updateConnectionUI(state.isOnline, true);
+
+            try {
+                const sep = state.gasUrl.includes('?') ? '&' : '?';
+                const response = await fetch(`${state.gasUrl}${sep}_t=${Date.now()}`, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+
+                if (!response.ok) throw new Error(`Errore HTTP ${response.status}`);
+
+                const text = await response.text();
+                let res;
+                try {
+                    res = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("Risposta non valida dal server: verifica che la Web App sia accessibile a 'Chiunque'.");
+                }
+
+                if (res.status !== 'ok') {
+                    throw new Error(res.message || "Errore dal server remoto");
+                }
+
+                const cloudStudents = Array.isArray(res.students) ? res.students : [];
+                const cloudCards = Array.isArray(res.cards) ? res.cards : [];
+                const cloudCurriculum = (res.curriculum && typeof res.curriculum === 'object') ? res.curriculum : {};
+
+                state.students = cloudStudents.map(s => ({ ...s, password: '***' }));
+                state.cards = cloudCards;
+
+                if (Object.keys(cloudCurriculum).length > 0) {
+                    state.curriculum = cloudCurriculum;
+                    syncClassList();
+                } else {
+                    syncClassList();
+                    await pushCloudData();
+                }
+
+                saveLocalCache();
+                updateConnectionUI(true, false);
+                refreshActiveScreen();
+
+                if (!silent) {
+                    showToast("Dati sincronizzati con successo!");
+                }
+                return true;
+            } catch (err) {
+                console.error("Errore fetchCloudData:", err);
+                updateConnectionUI(false, false);
+                if (!silent) {
+                    showDialog("Connessione non riuscita", `Dettaglio: ${err.message}`);
+                }
+                return false;
+            }
+        }
+
+        async function pushCloudData() {
+            if (!state.gasUrl) return false;
+            updateConnectionUI(state.isOnline, true);
+
+            try {
+                const response = await fetch(state.gasUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'syncAll',
+                        students: state.students,
+                        cards: state.cards,
+                        curriculum: state.curriculum
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Errore HTTP ${response.status}`);
+                const res = JSON.parse(await response.text());
+                if (res.status !== 'ok') throw new Error(res.message || "Errore salvataggio");
+
+                state.students = state.students.map(s => ({ ...s, password: '***' }));
+                saveLocalCache();
+                updateConnectionUI(true, false);
+                return true;
+            } catch (err) {
+                console.error("Errore pushCloudData:", err);
+                updateConnectionUI(false, false);
+                return false;
+            }
+        }
+
+        async function manualSyncNow() {
+            if (!state.gasUrl) {
+                showDialog("Modalità Locale Offline", "Nessun database remoto configurato.");
+                return;
+            }
+            await fetchCloudData(false);
+        }
+
+        function refreshActiveScreen() {
+            const activeClass = getActiveWorkspaceClass();
+            if (activeClass) {
+                populateStudentFilters(activeClass);
+                populateCardDisciplineSelect(activeClass);
+                renderStudentDeck();
+            }
+            if (isTeacherAuthenticated) {
+                renderTeacherCurriculum();
+                renderTeacherStudents();
+                onTeacherCardsClassFilterChange();
+            }
+        }
+
+        // =========================================================================
+        // AUTENTICAZIONE LATO SERVER (verifyLogin) & NAVIGAZIONE
+        // =========================================================================
+        function showOnlyScreen(screenId) {
+            ['screen-login', 'screen-student', 'screen-teacher'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function handleLogoClick() {
+            if (isTeacherAuthenticated) {
+                state.teacherPreviewClass = null;
+                showOnlyScreen('screen-teacher');
+            } else if (state.currentStudent) {
+                showOnlyScreen('screen-student');
+            } else {
+                showOnlyScreen('screen-login');
+            }
+        }
+
+        function updateHeaderUserBadge() {
+            const badge = document.getElementById('header-user-badge');
+            const nameEl = document.getElementById('header-user-name');
+            const roleEl = document.getElementById('header-user-role');
+
+            if (isTeacherAuthenticated) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                nameEl.textContent = state.teacherSessionUser || 'Docente';
+                roleEl.textContent = state.gasUrl ? 'Docente' : 'Configurazione';
+            } else if (state.currentStudent) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                nameEl.textContent = state.currentStudent.name;
+                roleEl.textContent = `Classe ${state.currentStudent.className}`;
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+        }
+
+        async function handleStudentLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+
+            if (!username || !password) return;
+
+            if (!state.gasUrl) {
+                showDialog(
+                    "Database non collegato",
+                    "L'applicazione è in modalità Locale Offline. Chiedi al docente di completare la configurazione dall'Area Docenti."
+                );
+                return;
+            }
+
+            const btn = document.getElementById('btn-student-login-submit');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Login...";
+
+            try {
+                const response = await fetch(state.gasUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'verifyLogin',
+                        role: 'student',
+                        username,
+                        password
+                    })
+                });
+
+                const result = JSON.parse(await response.text());
+                if (result.status === 'ok' && result.valid && result.student) {
+                    state.currentStudent = result.student;
+                    isTeacherAuthenticated = false;
+                    state.teacherPreviewClass = null;
+
+                    clearAllLoginInputs();
+                    updateHeaderUserBadge();
+                    await fetchCloudData(true);
+
+                    document.getElementById('student-banner-class').textContent = state.currentStudent.className;
+                    document.getElementById('btn-back-to-teacher').classList.add('hidden');
+                    document.getElementById('btn-back-to-teacher').classList.remove('flex');
+                    document.getElementById('student-create-card-panel').classList.remove('hidden');
+
+                    showOnlyScreen('screen-student');
+                    populateStudentFilters(state.currentStudent.className);
+                    populateCardDisciplineSelect(state.currentStudent.className);
+                    renderStudentDeck();
+                } else {
+                    showDialog("Accesso Negato", "Username o password non validi. Controlla i dati inseriti.");
+                }
+            } catch (err) {
+                showDialog("Errore di Connessione", `Impossibile completare l'accesso: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        }
+
+        function toggleTeacherArea() {
+            if (isTeacherAuthenticated) {
+                state.teacherPreviewClass = null;
+                showOnlyScreen('screen-teacher');
+                return;
+            }
+
+            clearAllLoginInputs();
+
+            const offlineBox = document.getElementById('teacher-offline-setup-box');
+            const loginForm = document.getElementById('teacher-login-form');
+
+            if (!state.gasUrl) {
+                offlineBox.classList.remove('hidden');
+                loginForm.classList.add('hidden');
+            } else {
+                offlineBox.classList.add('hidden');
+                loginForm.classList.remove('hidden');
+            }
+
+            document.getElementById('modal-teacher-login').classList.remove('hidden');
+            lucide.createIcons();
+            if (state.gasUrl) {
+                setTimeout(() => document.getElementById('teacher-login-user').focus(), 50);
+            }
+        }
+
+        function enterOfflineTeacherSetup() {
+            isTeacherAuthenticated = true;
+            state.teacherSessionUser = 'Configurazione';
+            state.teacherSessionPass = '';
+            closeModalById('modal-teacher-login');
+            document.getElementById('btn-teacher-nav-text').textContent = "Pannello Docente";
+            document.getElementById('teacher-badge-username').textContent = "Configurazione Iniziale";
+            updateHeaderUserBadge();
+            showOnlyScreen('screen-teacher');
+            switchTeacherTab(4);
+        }
+
+        async function submitTeacherLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('teacher-login-user').value.trim();
+            const password = document.getElementById('teacher-login-pass').value.trim();
+
+            if (!username || !password) return;
+
+            const btn = document.getElementById('btn-teacher-login-submit');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Login...";
+
+            try {
+                const response = await fetch(state.gasUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'verifyLogin',
+                        role: 'teacher',
+                        username,
+                        password
+                    })
+                });
+
+                const result = JSON.parse(await response.text());
+                if (result.status === 'ok' && result.valid) {
+                    isTeacherAuthenticated = true;
+                    state.teacherSessionUser = username;
+                    state.teacherSessionPass = password;
+                    state.teacherPreviewClass = null;
+
+                    clearAllLoginInputs();
+                    closeModalById('modal-teacher-login');
+                    document.getElementById('btn-teacher-nav-text').textContent = "Pannello Docente";
+                    document.getElementById('teacher-badge-username').textContent = username;
+                    document.getElementById('gas-url-input').value = state.gasUrl;
+                    onGasUrlInput();
+                    updateHeaderUserBadge();
+
+                    await fetchCloudData(true);
+                    showOnlyScreen('screen-teacher');
+                    switchTeacherTab(1);
+                } else {
+                    showDialog(
+                        "Credenziali Non Valide",
+                        "Username o password docente errati."
+                    );
+                }
+            } catch (err) {
+                showDialog("Errore di Connessione", `Impossibile contattare il server: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        }
+
+        function logoutUser() {
+            state.currentStudent = null;
+            isTeacherAuthenticated = false;
+            state.teacherSessionUser = "";
+            state.teacherSessionPass = "";
+            state.teacherPreviewClass = null;
+            document.getElementById('btn-teacher-nav-text').textContent = "Area Docenti";
+            closeFullscreenStudy();
+            clearAllLoginInputs();
+            updateHeaderUserBadge();
+            showOnlyScreen('screen-login');
+        }
+
+        // =========================================================================
+        // SPAZIO LAVORO STUDENTI (SOLO LETTURA / CREAZIONE — ZERO ELIMINAZIONE)
+        // =========================================================================
+        function getActiveWorkspaceClass() {
+            if (state.teacherPreviewClass) return state.teacherPreviewClass;
+            if (state.currentStudent) return state.currentStudent.className;
+            return null;
+        }
+
+        function populateCardDisciplineSelect(cls) {
+            const classCurr = state.curriculum[cls] || {};
+            const disciplines = Object.keys(classCurr);
+            const select = document.getElementById('card-input-discipline');
+            const prevVal = select.value;
+
+            select.innerHTML = disciplines.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+            if (disciplines.includes(prevVal)) {
+                select.value = prevVal;
+            }
+            populateCardTopicSelect();
+        }
+
+        function populateCardTopicSelect() {
+            const cls = getActiveWorkspaceClass();
+            if (!cls) return;
+            const disc = document.getElementById('card-input-discipline').value;
+            const topics = (state.curriculum[cls] && state.curriculum[cls][disc]) ? state.curriculum[cls][disc] : [];
+
+            const select = document.getElementById('card-input-topic');
+            if (topics.length === 0) {
+                select.innerHTML = `<option value="Generale">Generale</option>`;
+            } else {
+                select.innerHTML = topics.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+            }
+        }
+
+        function populateStudentFilters(cls) {
+            const classCurr = state.curriculum[cls] || {};
+            const discSelect = document.getElementById('filter-student-discipline');
+            const curDisc = discSelect.value || 'ALL';
+            const discs = Object.keys(classCurr);
+
+            discSelect.innerHTML = `<option value="ALL">Tutte le discipline</option>` +
+                discs.map(d => `<option value="${escapeHtml(d)}" ${curDisc === d ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
+
+            onStudentFilterDisciplineChange(true);
+        }
+
+        function onStudentFilterDisciplineChange(skipRender = false) {
+            const cls = getActiveWorkspaceClass();
+            if (!cls) return;
+            const selectedDisc = document.getElementById('filter-student-discipline').value;
+            const topicSelect = document.getElementById('filter-student-topic');
+            const curTopic = topicSelect.value || 'ALL';
+
+            let topics = [];
+            if (selectedDisc === 'ALL') {
+                const classCurr = state.curriculum[cls] || {};
+                Object.values(classCurr).forEach(arr => topics.push(...arr));
+                topics = [...new Set(topics)];
+            } else {
+                topics = (state.curriculum[cls] && state.curriculum[cls][selectedDisc]) ? state.curriculum[cls][selectedDisc] : [];
+            }
+
+            topicSelect.innerHTML = `<option value="ALL">Tutti gli argomenti</option>` +
+                topics.map(t => `<option value="${escapeHtml(t)}" ${curTopic === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
+
+            if (!skipRender) onStudentFilterChange();
+        }
+
+        function onStudentFilterChange() {
+            renderStudentDeck();
+        }
+
+        function getFilteredWorkspaceCards() {
+            const cls = getActiveWorkspaceClass();
+            if (!cls) return [];
+            const fDisc = document.getElementById('filter-student-discipline').value;
+            const fTopic = document.getElementById('filter-student-topic').value;
+            const search = (document.getElementById('student-search-input')?.value || '').trim().toLowerCase();
+
+            return state.cards.filter(c => {
+                if (c.className !== cls) return false;
+                if (fDisc !== 'ALL' && c.discipline !== fDisc) return false;
+                if (fTopic !== 'ALL' && c.topic !== fTopic) return false;
+                if (search) {
+                    const hay = `${c.front} ${c.back} ${c.author} ${c.discipline} ${c.topic}`.toLowerCase();
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
+        }
+
+        function renderStudentDeck() {
+            const cls = getActiveWorkspaceClass();
+            if (!cls) return;
+
+            const allClassCards = state.cards.filter(c => c.className === cls);
+            document.getElementById('student-deck-total-badge').textContent = `${allClassCards.length} Carte`;
+
+            const filtered = getFilteredWorkspaceCards();
+            document.getElementById('student-visible-cards-count').textContent = `${filtered.length} carte`;
+
+            const grid = document.getElementById('student-cards-grid');
+            const empty = document.getElementById('student-cards-empty');
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                lucide.createIcons();
+                return;
+            }
+
+            empty.classList.add('hidden');
+            // Vista studenti: nessun pulsante di eliminazione per nessuna carta
+            grid.innerHTML = filtered.map(card => {
+                const isAuthor = state.currentStudent && (
+                    card.author === state.currentStudent.name ||
+                    card.author === state.currentStudent.username
+                );
+                return `
+                    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition space-y-2">
+                        <div class="flex items-center flex-wrap gap-1.5">
+                            <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                ${escapeHtml(card.discipline)}
+                            </span>
+                            <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                                ${escapeHtml(card.topic)}
+                            </span>
+                            <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${isAuthor ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'}">
+                                Autore: ${isAuthor ? 'Tu (' + escapeHtml(card.author) + ')' : escapeHtml(card.author)}
+                            </span>
+                        </div>
+                        <h4 class="font-bold text-slate-900 text-sm sm:text-base leading-snug">${escapeHtml(card.front)}</h4>
+                        <p class="text-xs sm:text-sm text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">${escapeHtml(card.back)}</p>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        async function handleSaveFlashcard(e) {
+            e.preventDefault();
+            if (!state.currentStudent) return;
+
+            const discipline = document.getElementById('card-input-discipline').value;
+            const topic = document.getElementById('card-input-topic').value;
+            const front = document.getElementById('card-input-front').value.trim();
+            const back = document.getElementById('card-input-back').value.trim();
+
+            if (!front || !back) return;
+
+            const btn = document.getElementById('btn-submit-card');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Salvataggio...";
+
+            state.cards.unshift({
+                id: 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                className: state.currentStudent.className,
+                discipline,
+                topic,
+                front,
+                back,
+                author: state.currentStudent.name || state.currentStudent.username,
+                createdAt: new Date().toISOString()
+            });
+
+            saveLocalCache();
+            document.getElementById('card-input-front').value = '';
+            document.getElementById('card-input-back').value = '';
+            renderStudentDeck();
+
+            await pushCloudData();
+
+            btn.textContent = "Carta salvata!";
+            showToast("Carta salvata!");
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }, 1400);
+        }
+
+        // =========================================================================
+        // PLAYER INTERATTIVO A SCHERMO INTERO: MODALITÀ STUDIO 3D
+        // =========================================================================
+        function openFullscreenStudy() {
+            const cls = getActiveWorkspaceClass();
+            if (!cls) return;
+
+            const fDisc = document.getElementById('filter-student-discipline').value;
+            const fTopic = document.getElementById('filter-student-topic').value;
+            const discLabel = fDisc === 'ALL' ? 'Tutte le discipline' : fDisc;
+            const topicLabel = fTopic === 'ALL' ? 'Tutti gli argomenti' : fTopic;
+
+            document.getElementById('study-overlay-class').textContent = cls;
+            document.getElementById('study-overlay-filter-info').textContent = `${discLabel} • ${topicLabel}`;
+
+            initStudySession();
+            document.getElementById('fullscreen-study-overlay').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeFullscreenStudy() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            document.getElementById('fullscreen-study-overlay').classList.add('hidden');
+        }
+
+        function initStudySession() {
+            state.studyDeck = [...getFilteredWorkspaceCards()];
+            state.studyIndex = 0;
+            state.studyFlipped = false;
+            state.studyResults = {};
+            renderStudyCard();
+        }
+
+        function renderStudyCard() {
+            const deck = state.studyDeck;
+            const total = deck.length;
+            const values = Object.values(state.studyResults);
+            const learnedCount = values.filter(v => v === true).length;
+            const reviewCount = values.filter(v => v === false).length;
+
+            document.getElementById('study-stat-learned').textContent = learnedCount;
+            document.getElementById('study-stat-review').textContent = reviewCount;
+
+            const cardEl = document.getElementById('study-card-3d');
+            cardEl.classList.remove('rotate-y-180');
+            state.studyFlipped = false;
+
+            if (total === 0) {
+                document.getElementById('study-counter-label').textContent = "Carta 0 di 0";
+                document.getElementById('study-progress-fill').style.width = "0%";
+                document.getElementById('study-badge-discipline').textContent = "Nessuna";
+                document.getElementById('study-badge-topic').textContent = "---";
+                document.getElementById('study-text-front').textContent = "Nessuna flashcard disponibile per i filtri selezionati.";
+                document.getElementById('study-text-back').textContent = "---";
+                document.getElementById('study-badge-author').textContent = "Autore: ---";
+                return;
+            }
+
+            if (state.studyIndex < 0) state.studyIndex = total - 1;
+            if (state.studyIndex >= total) state.studyIndex = 0;
+
+            const card = deck[state.studyIndex];
+            const currentPos = state.studyIndex + 1;
+
+            document.getElementById('study-counter-label').textContent = `Carta ${currentPos} di ${total}`;
+            document.getElementById('study-progress-fill').style.width = `${(currentPos / total) * 100}%`;
+            document.getElementById('study-badge-discipline').textContent = card.discipline;
+            document.getElementById('study-badge-topic').textContent = card.topic;
+            document.getElementById('study-text-front').textContent = card.front;
+            document.getElementById('study-text-back').textContent = card.back;
+            document.getElementById('study-badge-author').textContent = `Autore: ${card.author}`;
+        }
+
+        function flipStudyCard() {
+            if (state.studyDeck.length === 0) return;
+            state.studyFlipped = !state.studyFlipped;
+            document.getElementById('study-card-3d').classList.toggle('rotate-y-180', state.studyFlipped);
+        }
+
+        function navigateStudyCard(delta) {
+            if (state.studyDeck.length === 0) return;
+            state.studyIndex += delta;
+            renderStudyCard();
+        }
+
+        function rateStudyCard(isLearned) {
+            const deck = state.studyDeck;
+            if (deck.length === 0) return;
+
+            const currentCard = deck[state.studyIndex];
+            state.studyResults[currentCard.id] = isLearned;
+
+            if (state.studyIndex >= deck.length - 1) {
+                renderStudyCard();
+                openStudySummaryModal();
+            } else {
+                state.studyIndex++;
+                renderStudyCard();
+            }
+        }
+
+        function shuffleStudySession() {
+            if (state.studyDeck.length <= 1) return;
+            for (let i = state.studyDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [state.studyDeck[i], state.studyDeck[j]] = [state.studyDeck[j], state.studyDeck[i]];
+            }
+            state.studyIndex = 0;
+            renderStudyCard();
+            showToast("Mazzo mescolato!");
+        }
+
+        function openStudySummaryModal() {
+            const total = state.studyDeck.length;
+            const learned = Object.values(state.studyResults).filter(v => v === true).length;
+
+            const pctLearnedRaw = total > 0 ? (learned / total) * 100 : 0;
+            const pctReviewRaw = total > 0 ? (100 - pctLearnedRaw) : 0;
+            const formatPct = (val) => Number.isInteger(val) ? `${val}%` : `${val.toFixed(1)}%`;
+
+            document.getElementById('summary-ratio-text').textContent = `${learned} su ${total} imparate`;
+            document.getElementById('summary-pct-learned').textContent = formatPct(pctLearnedRaw);
+            document.getElementById('summary-pct-review').textContent = formatPct(pctReviewRaw);
+
+            document.getElementById('modal-study-summary').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function finishStudyAndClose() {
+            closeModalById('modal-study-summary');
+            closeFullscreenStudy();
+            if (state.teacherPreviewClass) {
+                returnFromTeacherPreview();
+            }
+        }
+
+        function speakStudyCard(event, side) {
+            event.stopPropagation();
+            if (state.studyDeck.length === 0) return;
+            const card = state.studyDeck[state.studyIndex];
+            const text = side === 'front' ? card.front : card.back;
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'it-IT';
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // =========================================================================
+        // AREA DOCENTI: 4 SCHEDE
+        // =========================================================================
+        function switchTeacherTab(tabNum) {
+            state.teacherActiveTab = tabNum;
+            for (let i = 1; i <= 4; i++) {
+                const btn = document.getElementById(`t-tab-btn-${i}`);
+                const panel = document.getElementById(`t-tab-${i}`);
+                if (i === tabNum) {
+                    btn.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-sm transition";
+                    panel.classList.remove('hidden');
+                } else {
+                    btn.className = "py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900 transition";
+                    panel.classList.add('hidden');
+                }
+            }
+            if (tabNum === 1) renderTeacherCurriculum();
+            if (tabNum === 2) renderTeacherStudents();
+            if (tabNum === 3) onTeacherCardsClassFilterChange();
+            lucide.createIcons();
+        }
+
+        // --- SCHEDA 1: CLASSI, DISCIPLINE E ARGOMENTI ---
+        async function handleAddClass(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-class-input');
+            const newCls = input.value.trim().toUpperCase();
+            if (!newCls) return;
+
+            if (state.classes.includes(newCls)) {
+                showDialog("Classe esistente", `La classe "${newCls}" è già presente.`);
+                return;
+            }
+
+            state.classes.push(newCls);
+            state.curriculum[newCls] = { 'Matematica': ['Argomento generale'] };
+            state.curriculumSelectedClass = newCls;
+            state.curriculumSelectedDiscipline = 'Matematica';
+            input.value = '';
+
+            populateAllClassDropdowns();
+            saveLocalCache();
+            renderTeacherCurriculum();
+            await pushCloudData();
+            showToast(`Classe ${newCls} aggiunta!`);
+        }
+
+        function selectTeacherCurriculumClass(cls) {
+            state.curriculumSelectedClass = cls;
+            const discs = Object.keys(state.curriculum[cls] || {});
+            state.curriculumSelectedDiscipline = discs[0] || 'Matematica';
+            renderTeacherCurriculum();
+        }
+
+        function renderTeacherCurriculum() {
+            const pillsContainer = document.getElementById('teacher-classes-pills');
+            if (pillsContainer) {
+                pillsContainer.innerHTML = state.classes.map(c => {
+                    const active = c === state.curriculumSelectedClass;
+                    return `
+                        <button type="button" onclick="selectTeacherCurriculumClass('${escapeAttr(c)}')"
+                            class="px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition ${active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:text-slate-900'}">
+                            ${escapeHtml(c)}
+                        </button>
+                    `;
+                }).join('');
+            }
+
+            const cls = state.curriculumSelectedClass;
+            const classCurr = state.curriculum[cls] || {};
+            const discs = Object.keys(classCurr);
+
+            if (!discs.includes(state.curriculumSelectedDiscipline)) {
+                state.curriculumSelectedDiscipline = discs[0] || 'Matematica';
+            }
+
+            document.getElementById('curr-label-cls-1').textContent = cls;
+            document.getElementById('curr-label-cls-2').textContent = cls;
+            document.getElementById('curr-selected-disc-label').textContent = state.curriculumSelectedDiscipline;
+
+            const discContainer = document.getElementById('teacher-disciplines-list');
+            discContainer.innerHTML = discs.map(d => {
+                const active = d === state.curriculumSelectedDiscipline;
+                const topicCount = (classCurr[d] || []).length;
+                return `
+                    <div onclick="selectTeacherDiscipline('${escapeAttr(d)}')"
+                        class="p-3 rounded-2xl border cursor-pointer flex items-center justify-between gap-2 transition ${active ? 'bg-indigo-50 border-indigo-300 text-indigo-900' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'}">
+                        <div>
+                            <span class="font-bold text-sm block">${escapeHtml(d)}</span>
+                            <span class="text-[11px] text-slate-500">${topicCount} argomenti</span>
+                        </div>
+                        <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                            <button type="button" onclick="renameDiscipline('${escapeAttr(d)}')" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg" title="Rinomina disciplina">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                            </button>
+                            ${discs.length > 1 ? `
+                                <button type="button" onclick="deleteDiscipline('${escapeAttr(d)}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg" title="Elimina disciplina">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const topics = classCurr[state.curriculumSelectedDiscipline] || [];
+            const topicContainer = document.getElementById('teacher-topics-list');
+            if (topics.length === 0) {
+                topicContainer.innerHTML = `<p class="text-xs text-slate-400 italic py-4 text-center">Nessun argomento inserito per questa disciplina.</p>`;
+            } else {
+                topicContainer.innerHTML = topics.map((t, idx) => `
+                    <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                        <span class="text-sm font-semibold text-slate-800">${escapeHtml(t)}</span>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button type="button" onclick="renameTopic(${idx})" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg" title="Rinomina argomento">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button type="button" onclick="deleteTopic(${idx})" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg" title="Elimina argomento">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            lucide.createIcons();
+        }
+
+        function selectTeacherDiscipline(disc) {
+            state.curriculumSelectedDiscipline = disc;
+            renderTeacherCurriculum();
+        }
+
+        async function handleAddDiscipline(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-discipline-input');
+            const name = input.value.trim();
+            if (!name) return;
+
+            const cls = state.curriculumSelectedClass;
+            if (state.curriculum[cls][name]) {
+                showDialog("Disciplina esistente", `La disciplina "${name}" è già presente nella classe ${cls}.`);
+                return;
+            }
+            state.curriculum[cls][name] = ['Argomento introduttivo'];
+            state.curriculumSelectedDiscipline = name;
+            input.value = '';
+            saveLocalCache();
+            renderTeacherCurriculum();
+            await pushCloudData();
+            showToast("Disciplina salvata!");
+        }
+
+        function renameDiscipline(oldName) {
+            const cls = state.curriculumSelectedClass;
+            showPromptDialog(`Rinomina Disciplina (${cls})`, "Inserisci il nuovo nome della disciplina:", oldName, async (newName) => {
+                newName = newName.trim();
+                if (!newName || newName === oldName) return;
+                if (state.curriculum[cls][newName]) {
+                    showDialog("Errore", "Esiste già una disciplina con questo nome nella stessa classe.");
+                    return;
+                }
+                state.curriculum[cls][newName] = state.curriculum[cls][oldName];
+                delete state.curriculum[cls][oldName];
+                state.curriculumSelectedDiscipline = newName;
+
+                state.cards.forEach(c => {
+                    if (c.className === cls && c.discipline === oldName) c.discipline = newName;
+                });
+
+                saveLocalCache();
+                renderTeacherCurriculum();
+                await pushCloudData();
+            });
+        }
+
+        function deleteDiscipline(discName) {
+            const cls = state.curriculumSelectedClass;
+            showConfirmDialog("Elimina Disciplina", `Vuoi eliminare "${discName}" dalla classe ${cls}?`, async () => {
+                delete state.curriculum[cls][discName];
+                syncClassList();
+                saveLocalCache();
+                renderTeacherCurriculum();
+                await pushCloudData();
+            });
+        }
+
+        async function handleAddTopic(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-topic-input');
+            const topic = input.value.trim();
+            if (!topic) return;
+
+            const cls = state.curriculumSelectedClass;
+            const disc = state.curriculumSelectedDiscipline;
+            if (!state.curriculum[cls][disc]) state.curriculum[cls][disc] = [];
+            if (state.curriculum[cls][disc].includes(topic)) {
+                showDialog("Argomento esistente", "Questo argomento è già presente nella disciplina.");
+                return;
+            }
+            state.curriculum[cls][disc].push(topic);
+            input.value = '';
+            saveLocalCache();
+            renderTeacherCurriculum();
+            await pushCloudData();
+            showToast("Argomento salvato!");
+        }
+
+        function renameTopic(idx) {
+            const cls = state.curriculumSelectedClass;
+            const disc = state.curriculumSelectedDiscipline;
+            const oldTopic = state.curriculum[cls][disc][idx];
+
+            showPromptDialog(`Rinomina Argomento (${cls} - ${disc})`, "Inserisci il nuovo titolo dell'argomento:", oldTopic, async (newTopic) => {
+                newTopic = newTopic.trim();
+                if (!newTopic || newTopic === oldTopic) return;
+                state.curriculum[cls][disc][idx] = newTopic;
+
+                state.cards.forEach(c => {
+                    if (c.className === cls && c.discipline === disc && c.topic === oldTopic) c.topic = newTopic;
+                });
+
+                saveLocalCache();
+                renderTeacherCurriculum();
+                await pushCloudData();
+            });
+        }
+
+        function deleteTopic(idx) {
+            const cls = state.curriculumSelectedClass;
+            const disc = state.curriculumSelectedDiscipline;
+            const topicName = state.curriculum[cls][disc][idx];
+
+            showConfirmDialog("Elimina Argomento", `Vuoi eliminare l'argomento "${topicName}"?`, async () => {
+                state.curriculum[cls][disc].splice(idx, 1);
+                saveLocalCache();
+                renderTeacherCurriculum();
+                await pushCloudData();
+            });
+        }
+
+        // --- SCHEDA 2: ACCOUNT STUDENTI ---
+        function renderTeacherStudents() {
+            const filterCls = document.getElementById('teacher-students-class-filter').value;
+            const list = filterCls === 'ALL'
+                ? state.students
+                : state.students.filter(s => s.className === filterCls);
+
+            const tbody = document.getElementById('teacher-students-tbody');
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-slate-400">Nessuno studente presente per questa selezione.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(s => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3.5 px-5 font-bold text-slate-900">${escapeHtml(s.name)}</td>
+                    <td class="py-3.5 px-4">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            ${escapeHtml(s.className)}
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4 font-mono text-xs text-slate-700">${escapeHtml(s.username)}</td>
+                    <td class="py-3.5 px-4 font-mono text-xs text-slate-400">
+                        <span class="px-2 py-0.5 bg-slate-100 rounded border border-slate-200 text-slate-600">***</span>
+                    </td>
+                    <td class="py-3.5 px-5 text-right">
+                        <button type="button" onclick="openStudentModal('${s.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg" title="Modifica studente">
+                            <i data-lucide="pencil" class="w-4 h-4"></i>
+                        </button>
+                        <button type="button" onclick="confirmDeleteStudent('${s.id}')" class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg" title="Elimina studente">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function openStudentModal(studentId = null) {
+            populateAllClassDropdowns();
+            const passInput = document.getElementById('edit-student-password');
+            const passHint = document.getElementById('edit-student-password-hint');
+
+            if (studentId) {
+                const s = state.students.find(st => st.id === studentId);
+                if (!s) return;
+                document.getElementById('student-modal-title').textContent = "Modifica Account Studente";
+                document.getElementById('edit-student-id').value = s.id;
+                document.getElementById('edit-student-fullname').value = s.name;
+                document.getElementById('edit-student-class').value = s.className;
+                document.getElementById('edit-student-username').value = s.username;
+                passInput.value = '***';
+                passInput.required = false;
+                passHint.classList.remove('hidden');
+            } else {
+                document.getElementById('student-modal-title').textContent = "Nuovo Account Studente";
+                document.getElementById('edit-student-id').value = '';
+                document.getElementById('edit-student-fullname').value = '';
+                document.getElementById('edit-student-class').value = state.classes[0] || '1A';
+                document.getElementById('edit-student-username').value = '';
+                passInput.value = '';
+                passInput.required = true;
+                passHint.classList.add('hidden');
+            }
+            document.getElementById('modal-student-form').classList.remove('hidden');
+        }
+
+        async function handleSaveStudentAccount(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-student-id').value;
+            const name = document.getElementById('edit-student-fullname').value.trim();
+            const className = document.getElementById('edit-student-class').value;
+            const username = document.getElementById('edit-student-username').value.trim().toLowerCase();
+            const password = document.getElementById('edit-student-password').value.trim() || '***';
+
+            const duplicate = state.students.find(s => s.username.toLowerCase() === username && s.id !== id);
+            if (duplicate) {
+                showDialog("Username già in uso", `Lo username "${username}" è già assegnato a ${duplicate.name}.`);
+                return;
+            }
+
+            const btn = document.getElementById('btn-save-student-submit');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Salvataggio...";
+
+            if (id) {
+                const idx = state.students.findIndex(s => s.id === id);
+                state.students[idx] = { id, name, username, password, className };
+            } else {
+                state.students.push({
+                    id: 'stu_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                    name,
+                    username,
+                    password,
+                    className
+                });
+            }
+
+            await pushCloudData();
+            btn.disabled = false;
+            btn.textContent = origText;
+            closeModalById('modal-student-form');
+            renderTeacherStudents();
+            showToast("Account studente salvato!");
+        }
+
+        function confirmDeleteStudent(studentId) {
+            const s = state.students.find(st => st.id === studentId);
+            if (!s) return;
+            showConfirmDialog("Elimina Account", `Vuoi eliminare l'account di ${s.name} (${s.username})?`, async () => {
+                state.students = state.students.filter(st => st.id !== studentId);
+                saveLocalCache();
+                renderTeacherStudents();
+                await pushCloudData();
+                showToast("Account eliminato.");
+            });
+        }
+
+        // --- SCHEDA 3: MAZZI E CARTE DELLE CLASSI (ELIMINAZIONE SOLO DOCENTE) ---
+        function onTeacherCardsClassFilterChange() {
+            const cls = document.getElementById('teacher-cards-class-filter').value;
+            const discSelect = document.getElementById('teacher-cards-discipline-filter');
+            const prevDisc = discSelect.value || 'ALL';
+
+            let discs = [];
+            if (cls === 'ALL') {
+                Object.values(state.curriculum).forEach(obj => discs.push(...Object.keys(obj)));
+                discs = [...new Set(discs)];
+            } else {
+                discs = Object.keys(state.curriculum[cls] || {});
+            }
+
+            discSelect.innerHTML = `<option value="ALL">Tutte le Discipline</option>` +
+                discs.map(d => `<option value="${escapeHtml(d)}" ${prevDisc === d ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
+
+            onTeacherCardsDisciplineFilterChange();
+        }
+
+        function onTeacherCardsDisciplineFilterChange() {
+            const cls = document.getElementById('teacher-cards-class-filter').value;
+            const disc = document.getElementById('teacher-cards-discipline-filter').value;
+            const topicSelect = document.getElementById('teacher-cards-topic-filter');
+            const prevTopic = topicSelect.value || 'ALL';
+
+            let topics = [];
+            const classesToScan = cls === 'ALL' ? Object.keys(state.curriculum) : [cls];
+            classesToScan.forEach(c => {
+                const cObj = state.curriculum[c] || {};
+                if (disc === 'ALL') {
+                    Object.values(cObj).forEach(arr => topics.push(...arr));
+                } else if (cObj[disc]) {
+                    topics.push(...cObj[disc]);
+                }
+            });
+            topics = [...new Set(topics)];
+
+            topicSelect.innerHTML = `<option value="ALL">Tutti gli Argomenti</option>` +
+                topics.map(t => `<option value="${escapeHtml(t)}" ${prevTopic === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
+
+            renderTeacherCards();
+        }
+
+        function renderTeacherCards() {
+            const filterCls = document.getElementById('teacher-cards-class-filter').value;
+            const filterDisc = document.getElementById('teacher-cards-discipline-filter').value;
+            const filterTopic = document.getElementById('teacher-cards-topic-filter').value;
+            const search = (document.getElementById('teacher-cards-search').value || '').trim().toLowerCase();
+
+            const filtered = state.cards.filter(c => {
+                if (filterCls !== 'ALL' && c.className !== filterCls) return false;
+                if (filterDisc !== 'ALL' && c.discipline !== filterDisc) return false;
+                if (filterTopic !== 'ALL' && c.topic !== filterTopic) return false;
+                if (search) {
+                    const hay = `${c.front} ${c.back} ${c.author} ${c.discipline} ${c.topic} ${c.className}`.toLowerCase();
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
+
+            document.getElementById('teacher-cards-count-badge').textContent = `${filtered.length} carte`;
+
+            const tbody = document.getElementById('teacher-cards-tbody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-xs text-slate-400">Nessuna flashcard trovata per questa selezione.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(c => `
+                <tr class="hover:bg-slate-50 transition align-top">
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-slate-900 text-white">
+                            ${escapeHtml(c.className)}
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="block text-xs font-extrabold text-indigo-700">${escapeHtml(c.discipline)}</span>
+                        <span class="block text-[11px] text-slate-500">${escapeHtml(c.topic)}</span>
+                    </td>
+                    <td class="py-3.5 px-4 font-semibold text-slate-900 text-xs max-w-xs">${escapeHtml(c.front)}</td>
+                    <td class="py-3.5 px-4 text-slate-600 text-xs max-w-xs">${escapeHtml(c.back)}</td>
+                    <td class="py-3.5 px-4 text-xs text-slate-500 whitespace-nowrap">${escapeHtml(c.author)}</td>
+                    <td class="py-3.5 px-5 text-right whitespace-nowrap">
+                        <button type="button" onclick="openTeacherCardModal('${c.id}')"
+                            class="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg" title="Modifica carta">
+                            <i data-lucide="pencil" class="w-4 h-4"></i>
+                        </button>
+                        <button type="button" onclick="confirmTeacherDeleteCard('${c.id}')"
+                            class="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg" title="Elimina carta">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // Funzione di eliminazione carta: consentita ESCLUSIVAMENTE al docente autenticato
+        async function deleteCard(cardId) {
+            if (!isTeacherAuthenticated) return;
+            state.cards = state.cards.filter(c => c.id !== cardId);
+            saveLocalCache();
+            renderTeacherCards();
+            await pushCloudData();
+            showToast("Flashcard eliminata.");
+        }
+
+        function confirmTeacherDeleteCard(cardId) {
+            if (!isTeacherAuthenticated) return;
+            showConfirmDialog("Elimina Flashcard", "Vuoi eliminare definitivamente questa flashcard?", async () => {
+                await deleteCard(cardId);
+            });
+        }
+
+        function populateTeacherCardDisciplineSelect() {
+            const cls = document.getElementById('t-card-class').value;
+            const discs = Object.keys(state.curriculum[cls] || {});
+            const select = document.getElementById('t-card-discipline');
+            select.innerHTML = discs.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+            populateTeacherCardTopicSelect();
+        }
+
+        function populateTeacherCardTopicSelect() {
+            const cls = document.getElementById('t-card-class').value;
+            const disc = document.getElementById('t-card-discipline').value;
+            const topics = (state.curriculum[cls] && state.curriculum[cls][disc]) ? state.curriculum[cls][disc] : ['Generale'];
+            const select = document.getElementById('t-card-topic');
+            select.innerHTML = topics.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        }
+
+        function openTeacherCardModal(cardId = null) {
+            populateAllClassDropdowns();
+            if (cardId) {
+                const c = state.cards.find(item => item.id === cardId);
+                if (!c) return;
+                document.getElementById('t-card-modal-title').textContent = "Modifica Flashcard (Docente)";
+                document.getElementById('t-card-edit-id').value = c.id;
+                document.getElementById('t-card-class').value = c.className;
+                populateTeacherCardDisciplineSelect();
+                document.getElementById('t-card-discipline').value = c.discipline;
+                populateTeacherCardTopicSelect();
+                document.getElementById('t-card-topic').value = c.topic;
+                document.getElementById('t-card-front').value = c.front;
+                document.getElementById('t-card-back').value = c.back;
+            } else {
+                document.getElementById('t-card-modal-title').textContent = "Nuova Flashcard (Docente)";
+                document.getElementById('t-card-edit-id').value = '';
+                document.getElementById('t-card-class').value = state.classes[0] || '1A';
+                populateTeacherCardDisciplineSelect();
+                document.getElementById('t-card-front').value = '';
+                document.getElementById('t-card-back').value = '';
+            }
+            document.getElementById('modal-teacher-card').classList.remove('hidden');
+        }
+
+        async function handleSaveTeacherCard(e) {
+            e.preventDefault();
+            const id = document.getElementById('t-card-edit-id').value;
+            const className = document.getElementById('t-card-class').value;
+            const discipline = document.getElementById('t-card-discipline').value;
+            const topic = document.getElementById('t-card-topic').value;
+            const front = document.getElementById('t-card-front').value.trim();
+            const back = document.getElementById('t-card-back').value.trim();
+
+            if (!front || !back) return;
+
+            const btn = document.getElementById('btn-save-teacher-card');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Salvataggio...";
+
+            if (id) {
+                const idx = state.cards.findIndex(c => c.id === id);
+                if (idx !== -1) {
+                    state.cards[idx] = { ...state.cards[idx], className, discipline, topic, front, back };
+                }
+            } else {
+                state.cards.unshift({
+                    id: 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                    className,
+                    discipline,
+                    topic,
+                    front,
+                    back,
+                    author: state.teacherSessionUser || 'Docente',
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            saveLocalCache();
+            await pushCloudData();
+
+            btn.disabled = false;
+            btn.textContent = origText;
+            closeModalById('modal-teacher-card');
+            renderTeacherCards();
+            showToast("Carta salvata!");
+        }
+
+        function launchTeacherClassStudy() {
+            const cls = document.getElementById('teacher-quick-study-class').value || state.classes[0] || '1A';
+            state.teacherPreviewClass = cls;
+            document.getElementById('student-banner-class').textContent = `${cls} (Anteprima Docente)`;
+            document.getElementById('btn-back-to-teacher').classList.remove('hidden');
+            document.getElementById('btn-back-to-teacher').classList.add('flex');
+            document.getElementById('student-create-card-panel').classList.add('hidden');
+
+            showOnlyScreen('screen-student');
+            populateStudentFilters(cls);
+            renderStudentDeck();
+            openFullscreenStudy();
+        }
+
+        function returnFromTeacherPreview() {
+            state.teacherPreviewClass = null;
+            document.getElementById('btn-back-to-teacher').classList.add('hidden');
+            document.getElementById('btn-back-to-teacher').classList.remove('flex');
+            document.getElementById('student-create-card-panel').classList.remove('hidden');
+
+            if (isTeacherAuthenticated) {
+                showOnlyScreen('screen-teacher');
+                switchTeacherTab(3);
+            } else {
+                showOnlyScreen('screen-login');
+            }
+        }
+
+        function exportTeacherJSON() {
+            const filterCls = document.getElementById('teacher-cards-class-filter').value;
+            const list = filterCls === 'ALL'
+                ? state.cards
+                : state.cards.filter(c => c.className === filterCls);
+
+            const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filterCls === 'ALL' ? 'backup_flashcard_tutte_le_classi.json' : `backup_flashcard_classe_${filterCls}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // --- SCHEDA 4: SICUREZZA E DATABASE ---
+        function copyAppsScriptCode() {
+            const code = document.getElementById('apps-script-template').textContent.trim();
+            const textarea = document.createElement('textarea');
+            textarea.value = code;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showDialog(
+                    "Codice Copiato",
+                    "Incolla il codice nell'editor Apps Script, salva (Ctrl+S) e pubblica come Web App con accesso impostato su 'Chiunque'."
+                );
+            } catch (err) {
+                showDialog("Errore Copia", "Seleziona manualmente il testo nel riquadro scuro e premi Ctrl+C.");
+            }
+            document.body.removeChild(textarea);
+        }
+
+        async function testAndSaveGasConnection() {
+            const rawUrl = document.getElementById('gas-url-input').value.trim();
+            const check = validateAppsScriptUrl(rawUrl);
+            if (!check.valid) {
+                showDialog(check.title, check.message);
+                return;
+            }
+
+            state.gasUrl = check.url;
+            localStorage.setItem(STORAGE_KEYS.GAS_URL, check.url);
+            await fetchCloudData(false);
+        }
+
+        function openDiagnosticUrl() {
+            const rawUrl = document.getElementById('gas-url-input').value.trim() || state.gasUrl;
+            const check = validateAppsScriptUrl(rawUrl);
+            if (!check.valid) {
+                showDialog(check.title, check.message);
+                return;
+            }
+            window.open(check.url, '_blank', 'noopener,noreferrer');
+        }
+
+        async function handleUpdateTeacherCredentials(e) {
+            e.preventDefault();
+            if (!state.gasUrl) {
+                showDialog("Database non collegato", "Inserisci e testa l'URL /exec nel blocco 2 prima di salvare le credenziali docente.");
+                return;
+            }
+
+            const newUsername = document.getElementById('cfg-new-teacher-user').value.trim();
+            const newPassword = document.getElementById('cfg-new-teacher-pass').value.trim();
+            if (!newUsername || !newPassword) return;
+
+            const btn = document.getElementById('btn-save-teacher-creds');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Salvataggio...";
+
+            try {
+                const response = await fetch(state.gasUrl, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'setTeacherCredentials',
+                        currentUsername: state.teacherSessionUser,
+                        currentPassword: state.teacherSessionPass,
+                        newUsername,
+                        newPassword
+                    })
+                });
+
+                const res = JSON.parse(await response.text());
+                if (res.status === 'ok') {
+                    state.teacherSessionUser = newUsername;
+                    state.teacherSessionPass = newPassword;
+                    document.getElementById('teacher-badge-username').textContent = newUsername;
+                    document.getElementById('cfg-new-teacher-user').value = '';
+                    document.getElementById('cfg-new-teacher-pass').value = '';
+                    updateHeaderUserBadge();
+                    showToast("Credenziali docente salvate sul server!");
+                } else {
+                    showDialog("Aggiornamento non riuscito", res.message || "Impossibile aggiornare le credenziali sul server.");
+                }
+            } catch (err) {
+                showDialog("Errore di Rete", `Impossibile comunicare con il server: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        }
+
+        function downloadConfiguredHtml() {
+            const rawUrl = (document.getElementById('gas-url-input').value.trim() || state.gasUrl || "");
+            if (!rawUrl) {
+                showDialog("URL mancante", "Inserisci e testa l'URL /exec nel blocco 2 prima di scaricare il file per gli studenti.");
+                return;
+            }
+            const check = validateAppsScriptUrl(rawUrl);
+            if (!check.valid) {
+                showDialog(check.title, check.message);
+                return;
+            }
+
+            const urlToEmbed = check.url.replace(/"/g, '\\"');
+            let htmlOutput = PRISTINE_HTML_TEMPLATE.replace(
+                /const DEFAULT_GAS_URL = ".*?";/,
+                `const DEFAULT_GAS_URL = "${urlToEmbed}";`
+            );
+
+            const blob = new Blob([htmlOutput], { type: 'text/html;charset=utf-8' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'index.html';
+            a.click();
+            URL.revokeObjectURL(downloadUrl);
+
+            showDialog(
+                "File index.html Esportato",
+                "Il file index.html scaricato contiene solo l'endpoint /exec e nessuna credenziale nel codice sorgente: è pronto per essere pubblicato su GitHub o distribuito agli studenti."
+            );
+        }
+
+        // =========================================================================
+        // UTILITÀ UI, TOAST E MODALI PERSONALIZZATE
+        // =========================================================================
+        let toastTimer = null;
+        function showToast(message) {
+            const banner = document.getElementById('toast-banner');
+            const msgEl = document.getElementById('toast-message');
+            if (!banner || !msgEl) return;
+            msgEl.textContent = message;
+            banner.classList.remove('hidden');
+            lucide.createIcons();
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 2600);
+        }
+
+        function closeModalById(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function showDialog(title, message) {
+            document.getElementById('dialog-title').textContent = title;
+            document.getElementById('dialog-message').textContent = message;
+            document.getElementById('dialog-input-wrapper').classList.add('hidden');
+            document.getElementById('dialog-actions').innerHTML = `
+                <button type="button" onclick="closeModalById('modal-dialog')"
+                    class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition">
+                    OK
+                </button>
+            `;
+            document.getElementById('modal-dialog').classList.remove('hidden');
+        }
+
+        function showConfirmDialog(title, message, onConfirm) {
+            document.getElementById('dialog-title').textContent = title;
+            document.getElementById('dialog-message').textContent = message;
+            document.getElementById('dialog-input-wrapper').classList.add('hidden');
+            window._dialogConfirmFn = () => {
+                closeModalById('modal-dialog');
+                onConfirm();
+            };
+            document.getElementById('dialog-actions').innerHTML = `
+                <button type="button" onclick="closeModalById('modal-dialog')"
+                    class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                    Annulla
+                </button>
+                <button type="button" onclick="window._dialogConfirmFn()"
+                    class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition">
+                    Conferma
+                </button>
+            `;
+            document.getElementById('modal-dialog').classList.remove('hidden');
+        }
+
+        function showPromptDialog(title, message, defaultValue, onSave) {
+            document.getElementById('dialog-title').textContent = title;
+            document.getElementById('dialog-message').textContent = message;
+            const wrap = document.getElementById('dialog-input-wrapper');
+            const input = document.getElementById('dialog-input');
+            wrap.classList.remove('hidden');
+            input.value = defaultValue || '';
+
+            window._dialogPromptFn = () => {
+                const val = input.value;
+                closeModalById('modal-dialog');
+                onSave(val);
+            };
+            document.getElementById('dialog-actions').innerHTML = `
+                <button type="button" onclick="closeModalById('modal-dialog')"
+                    class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                    Annulla
+                </button>
+                <button type="button" onclick="window._dialogPromptFn()"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition">
+                    Salva
+                </button>
+            `;
+            document.getElementById('modal-dialog').classList.remove('hidden');
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function escapeAttr(str) {
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+    </script>
+</body>
+</html>
