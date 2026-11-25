@@ -86,6 +86,12 @@
                     <span id="connection-label" class="hidden sm:inline">Locale Offline</span>
                 </div>
 
+                <!-- Badge Coda Carte in Attesa di Invio -->
+                <div id="pending-queue-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200" title="Carte salvate sul dispositivo in attesa di sincronizzazione">
+                    <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i>
+                    <span id="pending-queue-label">0 in coda</span>
+                </div>
+
                 <!-- Pulsante Sincronizza Ora -->
                 <button type="button" onclick="manualSyncNow()" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 flex items-center gap-1.5 transition" title="Sincronizza dati">
                     <i data-lucide="refresh-cw" id="sync-icon" class="w-3.5 h-3.5"></i>
@@ -548,7 +554,7 @@
                                 </div>
                                 <div>
                                     <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">1. Codice Backend (Code.gs)</h3>
-                                    <p class="text-xs text-slate-500">Script server-side con autenticazione protetta</p>
+                                    <p class="text-xs text-slate-500">Script server-side con salvataggio atomico multi-utente</p>
                                 </div>
                             </div>
                             <button type="button" onclick="copyAppsScriptCode()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
@@ -1132,7 +1138,7 @@ function doPost(e) {
     }
 
     // 2. IMPOSTA / AGGIORNA CREDENZIALI DOCENTE NELLA SCHEDA 'Config'
-    if (action === 'setTeacherCredentials') {
+    if (action === 'setTeacherCredentials' || action === 'updateTeacherCredentials') {
       var cfgMap = readConfigMap_(ss);
       var oldUser = String(cfgMap.teacherUsername || '').trim();
       var oldPass = String(cfgMap.teacherPassword || '').trim();
@@ -1166,6 +1172,37 @@ function doPost(e) {
       return jsonOut_({
         status: 'ok',
         message: 'Credenziali docenti salvate sul server.'
+      });
+    }
+
+    // 2B. AGGIUNTA ATOMICA DI UNA SINGOLA FLASHCARD (ANTI-SOVRASCRITTURA)
+    if (action === 'addCard' && req.card) {
+      var c = req.card;
+      var sheet = ss.getSheetByName('Flashcard');
+      var existingRows = sheet.getDataRange().getValues();
+      var alreadyExists = false;
+      for (var r = 1; r < existingRows.length; r++) {
+        if (String(existingRows[r][0]) === String(c.id)) {
+          alreadyExists = true;
+          break;
+        }
+      }
+      if (!alreadyExists) {
+        sheet.appendRow([
+          c.id,
+          c.className || '',
+          c.discipline || '',
+          c.topic || '',
+          c.front || '',
+          c.back || '',
+          c.author || '',
+          c.createdAt || new Date().toISOString()
+        ]);
+      }
+      return jsonOut_({
+        status: 'ok',
+        message: 'Flashcard aggiunta.',
+        addedId: c.id
       });
     }
 
@@ -1414,7 +1451,8 @@ function writeCurriculum_(ss, curr) {
             GAS_URL: 'fc_app_gas_url_v2',
             STUDENTS: 'fc_app_students_v2',
             CARDS: 'fc_app_cards_v2',
-            CURRICULUM: 'fc_app_curriculum_v2'
+            CURRICULUM: 'fc_app_curriculum_v2',
+            PENDING_CARDS: 'fc_pending_cards_v2'
         };
 
         // Cattura il sorgente HTML pulito prima di qualsiasi manipolazione DOM
@@ -1447,6 +1485,14 @@ function writeCurriculum_(ss, curr) {
             curriculumSelectedDiscipline: 'Matematica'
         };
 
+        function safeCreateIcons() {
+            try {
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            } catch (e) {}
+        }
+
         function getDefaultCurriculum() {
             return {
                 '1A': {
@@ -1466,7 +1512,7 @@ function writeCurriculum_(ss, curr) {
         // =========================================================================
         document.addEventListener('DOMContentLoaded', async () => {
             PRISTINE_HTML_TEMPLATE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-            lucide.createIcons();
+            safeCreateIcons();
 
             const codePreview = document.getElementById('code-gs-preview');
             if (codePreview) {
@@ -1476,6 +1522,7 @@ function writeCurriculum_(ss, curr) {
             clearAllLoginInputs();
             loadLocalCache();
             syncClassList();
+            updatePendingQueueBadge();
             updateConnectionUI(false, false);
 
             // Scorciatoie da tastiera per il Player Studio 3D (Spazio, Frecce, Esc)
@@ -1496,9 +1543,20 @@ function writeCurriculum_(ss, curr) {
                 }
             });
 
+            // Quando il dispositivo torna online, svuota automaticamente la coda locale
+            window.addEventListener('online', async () => {
+                if (state.gasUrl) {
+                    await fetchCloudData(true);
+                }
+            });
+
             if (state.gasUrl) {
                 document.getElementById('gas-url-input').value = state.gasUrl;
-                await fetchCloudData(true);
+                const ok = await fetchCloudData(true);
+                // Secondo tentativo silenzioso dopo 2s in caso di cold-start di Apps Script
+                if (!ok) {
+                    setTimeout(() => { fetchCloudData(true); }, 2000);
+                }
             }
         });
 
@@ -1509,6 +1567,35 @@ function writeCurriculum_(ss, curr) {
             });
         }
 
+        function getPendingCardsQueue() {
+            try {
+                const q = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_CARDS) || '[]');
+                return Array.isArray(q) ? q : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function setPendingCardsQueue(queue) {
+            localStorage.setItem(STORAGE_KEYS.PENDING_CARDS, JSON.stringify(queue || []));
+            updatePendingQueueBadge();
+        }
+
+        function updatePendingQueueBadge() {
+            const badge = document.getElementById('pending-queue-badge');
+            const label = document.getElementById('pending-queue-label');
+            if (!badge || !label) return;
+            const count = getPendingCardsQueue().length;
+            if (count > 0) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                label.textContent = count === 1 ? '1 carta in coda' : `${count} carte in coda`;
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+        }
+
         function loadLocalCache() {
             try {
                 const s = JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENTS));
@@ -1516,13 +1603,17 @@ function writeCurriculum_(ss, curr) {
                 const curr = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRICULUM));
 
                 state.students = Array.isArray(s) ? s : [];
-                state.cards = Array.isArray(c) ? c : [];
+                const cachedCards = Array.isArray(c) ? c : [];
+                const pending = getPendingCardsQueue();
+                const cachedIds = new Set(cachedCards.map(item => String(item.id)));
+                state.cards = [...pending.filter(item => !cachedIds.has(String(item.id))), ...cachedCards];
+
                 state.curriculum = (curr && typeof curr === 'object' && Object.keys(curr).length > 0)
                     ? curr
                     : getDefaultCurriculum();
             } catch (err) {
                 state.students = [];
-                state.cards = [];
+                state.cards = getPendingCardsQueue();
                 state.curriculum = getDefaultCurriculum();
             }
             syncClassList();
@@ -1594,7 +1685,7 @@ function writeCurriculum_(ss, curr) {
         }
 
         // =========================================================================
-        // VALIDAZIONE ENDPOINT & SINCRONIZZAZIONE CON IL DATABASE REMOTO
+        // VALIDAZIONE ENDPOINT & SINCRONIZZAZIONE MULTI-UTENTE CON CODA OFFLINE
         // =========================================================================
         function validateAppsScriptUrl(rawUrl) {
             const url = (rawUrl || "").trim();
@@ -1700,6 +1791,55 @@ function writeCurriculum_(ss, curr) {
             }
         }
 
+        // Invio atomico della singola carta (action: 'addCard') con coda locale anti-perdita
+        async function pushSingleCardToCloud(card) {
+            let queue = getPendingCardsQueue();
+            if (!queue.some(item => String(item.id) === String(card.id))) {
+                queue.push(card);
+                setPendingCardsQueue(queue);
+            }
+
+            const url = state.gasUrl || DEFAULT_GAS_URL;
+            if (!url) return false;
+
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    signal: controller.signal,
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'addCard',
+                        card: card
+                    })
+                });
+                clearTimeout(timer);
+
+                if (!response.ok) throw new Error(`Errore HTTP ${response.status}`);
+                const res = JSON.parse(await response.text());
+                if (res && res.status === 'ok') {
+                    const remaining = getPendingCardsQueue().filter(item => String(item.id) !== String(card.id));
+                    setPendingCardsQueue(remaining);
+                    updateConnectionUI(true, false);
+                    return true;
+                }
+            } catch (err) {
+                console.warn("Carta salvata in coda locale in attesa di rete:", err);
+                updateConnectionUI(false, false);
+            }
+            return false;
+        }
+
+        async function flushPendingCards() {
+            const queue = getPendingCardsQueue();
+            if (queue.length === 0) return;
+            for (const card of queue) {
+                await pushSingleCardToCloud(card);
+            }
+        }
+
         async function fetchCloudData(silent = false) {
             if (!state.gasUrl) {
                 updateConnectionUI(false, false);
@@ -1715,12 +1855,19 @@ function writeCurriculum_(ss, curr) {
 
             updateConnectionUI(state.isOnline, true);
 
+            // Prima svuota eventuali carte rimaste in coda offline su questo dispositivo
+            await flushPendingCards();
+
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
                 const sep = state.gasUrl.includes('?') ? '&' : '?';
                 const response = await fetch(`${state.gasUrl}${sep}_t=${Date.now()}`, {
                     method: 'GET',
-                    redirect: 'follow'
+                    redirect: 'follow',
+                    signal: controller.signal
                 });
+                clearTimeout(timer);
 
                 if (!response.ok) throw new Error(`Errore HTTP ${response.status}`);
 
@@ -1741,7 +1888,11 @@ function writeCurriculum_(ss, curr) {
                 const cloudCurriculum = (res.curriculum && typeof res.curriculum === 'object') ? res.curriculum : {};
 
                 state.students = cloudStudents.map(s => ({ ...s, password: '***' }));
-                state.cards = cloudCards;
+
+                // Unisce le carte sul server con eventuali carte ancora in coda locale
+                const pending = getPendingCardsQueue();
+                const serverIds = new Set(cloudCards.map(c => String(c.id)));
+                state.cards = [...pending.filter(c => !serverIds.has(String(c.id))), ...cloudCards];
 
                 if (Object.keys(cloudCurriculum).length > 0) {
                     state.curriculum = cloudCurriculum;
@@ -1774,9 +1925,12 @@ function writeCurriculum_(ss, curr) {
             updateConnectionUI(state.isOnline, true);
 
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
                 const response = await fetch(state.gasUrl, {
                     method: 'POST',
                     redirect: 'follow',
+                    signal: controller.signal,
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         action: 'syncAll',
@@ -1785,6 +1939,7 @@ function writeCurriculum_(ss, curr) {
                         curriculum: state.curriculum
                     })
                 });
+                clearTimeout(timer);
 
                 if (!response.ok) throw new Error(`Errore HTTP ${response.status}`);
                 const res = JSON.parse(await response.text());
@@ -1831,7 +1986,7 @@ function writeCurriculum_(ss, curr) {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(screenId).classList.remove('hidden');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function handleLogoClick() {
@@ -1887,9 +2042,12 @@ function writeCurriculum_(ss, curr) {
             btn.textContent = "Login...";
 
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
                 const response = await fetch(state.gasUrl, {
                     method: 'POST',
                     redirect: 'follow',
+                    signal: controller.signal,
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         action: 'verifyLogin',
@@ -1898,6 +2056,7 @@ function writeCurriculum_(ss, curr) {
                         password
                     })
                 });
+                clearTimeout(timer);
 
                 const result = JSON.parse(await response.text());
                 if (result.status === 'ok' && result.valid && result.student) {
@@ -1950,7 +2109,7 @@ function writeCurriculum_(ss, curr) {
             }
 
             document.getElementById('modal-teacher-login').classList.remove('hidden');
-            lucide.createIcons();
+            safeCreateIcons();
             if (state.gasUrl) {
                 setTimeout(() => document.getElementById('teacher-login-user').focus(), 50);
             }
@@ -1981,9 +2140,12 @@ function writeCurriculum_(ss, curr) {
             btn.textContent = "Login...";
 
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
                 const response = await fetch(state.gasUrl, {
                     method: 'POST',
                     redirect: 'follow',
+                    signal: controller.signal,
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         action: 'verifyLogin',
@@ -1992,6 +2154,7 @@ function writeCurriculum_(ss, curr) {
                         password
                     })
                 });
+                clearTimeout(timer);
 
                 const result = JSON.parse(await response.text());
                 if (result.status === 'ok' && result.valid) {
@@ -2143,11 +2306,12 @@ function writeCurriculum_(ss, curr) {
 
             const grid = document.getElementById('student-cards-grid');
             const empty = document.getElementById('student-cards-empty');
+            const pendingIds = new Set(getPendingCardsQueue().map(item => String(item.id)));
 
             if (filtered.length === 0) {
                 grid.innerHTML = '';
                 empty.classList.remove('hidden');
-                lucide.createIcons();
+                safeCreateIcons();
                 return;
             }
 
@@ -2158,8 +2322,9 @@ function writeCurriculum_(ss, curr) {
                     card.author === state.currentStudent.name ||
                     card.author === state.currentStudent.username
                 );
+                const isPending = pendingIds.has(String(card.id));
                 return `
-                    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 transition space-y-2">
+                    <div class="bg-white p-4 sm:p-5 rounded-2xl border ${isPending ? 'border-sky-200' : 'border-slate-200'} shadow-sm hover:border-indigo-300 transition space-y-2">
                         <div class="flex items-center flex-wrap gap-1.5">
                             <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                                 ${escapeHtml(card.discipline)}
@@ -2170,13 +2335,14 @@ function writeCurriculum_(ss, curr) {
                             <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${isAuthor ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'}">
                                 Autore: ${isAuthor ? 'Tu (' + escapeHtml(card.author) + ')' : escapeHtml(card.author)}
                             </span>
+                            ${isPending ? `<span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">In attesa di invio</span>` : ''}
                         </div>
                         <h4 class="font-bold text-slate-900 text-sm sm:text-base leading-snug">${escapeHtml(card.front)}</h4>
                         <p class="text-xs sm:text-sm text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">${escapeHtml(card.back)}</p>
                     </div>
                 `;
             }).join('');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         async function handleSaveFlashcard(e) {
@@ -2195,7 +2361,7 @@ function writeCurriculum_(ss, curr) {
             btn.disabled = true;
             btn.textContent = "Salvataggio...";
 
-            state.cards.unshift({
+            const newCard = {
                 id: 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                 className: state.currentStudent.className,
                 discipline,
@@ -2204,17 +2370,25 @@ function writeCurriculum_(ss, curr) {
                 back,
                 author: state.currentStudent.name || state.currentStudent.username,
                 createdAt: new Date().toISOString()
-            });
+            };
 
+            state.cards.unshift(newCard);
             saveLocalCache();
             document.getElementById('card-input-front').value = '';
             document.getElementById('card-input-back').value = '';
             renderStudentDeck();
 
-            await pushCloudData();
+            // Invio atomico singolo con coda locale anti-perdita offline
+            const synced = await pushSingleCardToCloud(newCard);
+            renderStudentDeck();
 
-            btn.textContent = "Carta salvata!";
-            showToast("Carta salvata!");
+            if (synced) {
+                btn.textContent = "Carta salvata!";
+                showToast("Carta salvata!");
+            } else {
+                btn.textContent = "Salvata in coda!";
+                showToast("Carta salvata localmente: verrà inviata appena torna la rete.");
+            }
             setTimeout(() => {
                 btn.disabled = false;
                 btn.textContent = origText;
@@ -2238,7 +2412,7 @@ function writeCurriculum_(ss, curr) {
 
             initStudySession();
             document.getElementById('fullscreen-study-overlay').classList.remove('hidden');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function closeFullscreenStudy() {
@@ -2348,7 +2522,7 @@ function writeCurriculum_(ss, curr) {
             document.getElementById('summary-pct-review').textContent = formatPct(pctReviewRaw);
 
             document.getElementById('modal-study-summary').classList.remove('hidden');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function finishStudyAndClose() {
@@ -2392,7 +2566,7 @@ function writeCurriculum_(ss, curr) {
             if (tabNum === 1) renderTeacherCurriculum();
             if (tabNum === 2) renderTeacherStudents();
             if (tabNum === 3) onTeacherCardsClassFilterChange();
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         // --- SCHEDA 1: CLASSI, DISCIPLINE E ARGOMENTI ---
@@ -2497,7 +2671,7 @@ function writeCurriculum_(ss, curr) {
                     </div>
                 `).join('');
             }
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function selectTeacherDiscipline(disc) {
@@ -2648,7 +2822,7 @@ function writeCurriculum_(ss, curr) {
                     </td>
                 </tr>
             `).join('');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         function openStudentModal(studentId = null) {
@@ -2827,7 +3001,7 @@ function writeCurriculum_(ss, curr) {
                     </td>
                 </tr>
             `).join('');
-            lucide.createIcons();
+            safeCreateIcons();
         }
 
         // Funzione di eliminazione carta: consentita ESCLUSIVAMENTE al docente autenticato
@@ -2909,8 +3083,10 @@ function writeCurriculum_(ss, curr) {
                 if (idx !== -1) {
                     state.cards[idx] = { ...state.cards[idx], className, discipline, topic, front, back };
                 }
+                saveLocalCache();
+                await pushCloudData();
             } else {
-                state.cards.unshift({
+                const newCard = {
                     id: 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                     className,
                     discipline,
@@ -2919,11 +3095,11 @@ function writeCurriculum_(ss, curr) {
                     back,
                     author: state.teacherSessionUser || 'Docente',
                     createdAt: new Date().toISOString()
-                });
+                };
+                state.cards.unshift(newCard);
+                saveLocalCache();
+                await pushSingleCardToCloud(newCard);
             }
-
-            saveLocalCache();
-            await pushCloudData();
 
             btn.disabled = false;
             btn.textContent = origText;
@@ -3034,9 +3210,12 @@ function writeCurriculum_(ss, curr) {
             btn.textContent = "Salvataggio...";
 
             try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
                 const response = await fetch(state.gasUrl, {
                     method: 'POST',
                     redirect: 'follow',
+                    signal: controller.signal,
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         action: 'setTeacherCredentials',
@@ -3046,6 +3225,7 @@ function writeCurriculum_(ss, curr) {
                         newPassword
                     })
                 });
+                clearTimeout(timer);
 
                 const res = JSON.parse(await response.text());
                 if (res.status === 'ok') {
@@ -3079,7 +3259,7 @@ function writeCurriculum_(ss, curr) {
                 return;
             }
 
-            const urlToEmbed = check.url.replace(/"/g, '\\"');
+            const urlToEmbed = check.url.replace(/"/g, '\"');
             let htmlOutput = PRISTINE_HTML_TEMPLATE.replace(
                 /const DEFAULT_GAS_URL = ".*?";/,
                 `const DEFAULT_GAS_URL = "${urlToEmbed}";`
@@ -3109,7 +3289,7 @@ function writeCurriculum_(ss, curr) {
             if (!banner || !msgEl) return;
             msgEl.textContent = message;
             banner.classList.remove('hidden');
-            lucide.createIcons();
+            safeCreateIcons();
             if (toastTimer) clearTimeout(toastTimer);
             toastTimer = setTimeout(() => {
                 banner.classList.add('hidden');
