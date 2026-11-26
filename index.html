@@ -1791,6 +1791,40 @@ function writeCurriculum_(ss, curr) {
             }
         }
 
+
+        async function fetchGasWithRetry(url, options = {}, maxRetries = 3, timeoutMs = 25000) {
+            let lastError = null;
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    clearTimeout(timer);
+
+                    if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+                        const backoff = Math.min(4500, 600 * Math.pow(2, attempt)) + Math.floor(Math.random() * 700);
+                        await new Promise(r => setTimeout(r, backoff));
+                        continue;
+                    }
+                    return response;
+                } catch (err) {
+                    clearTimeout(timer);
+                    lastError = err;
+                    if (attempt < maxRetries) {
+                        const backoff = Math.min(4500, 600 * Math.pow(2, attempt)) + Math.floor(Math.random() * 700);
+                        await new Promise(r => setTimeout(r, backoff));
+                        continue;
+                    }
+                }
+            }
+            throw lastError || new Error('Errore di rete dopo tentativi multipli');
+        }
+
+        
+
         // Invio atomico della singola carta (action: 'addCard') con coda locale anti-perdita
         async function pushSingleCardToCloud(card) {
             let queue = getPendingCardsQueue();
